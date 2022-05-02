@@ -15,7 +15,8 @@ class config:
     # dataset
     input_path = "./data/uspp2pm"
     title_path = "./data/cpcs/titles.csv"
-    model_path = "./pretrains/deberta-v3-large"
+    # model_path = "./pretrains/deberta-v3-large"
+    model_path = "./out/test/"
     train_data_path = os.path.join(input_path, "train.csv")
     test_data_path = os.path.join(input_path, "test.csv")
     # training
@@ -31,6 +32,7 @@ parser = argparse.ArgumentParser("US patent model")
 parser.add_argument("--evaluate", action="store_true")
 
 opt = parser.parse_args()
+opt.evaluate = True
 config.is_training = not opt.evaluate
 config.is_evaluation = opt.evaluate
 
@@ -41,12 +43,9 @@ logger.config_logger(output_dir=config.save_path)
 train_data = load_split_data(data_path=config.train_data_path, title_path=config.title_path, num_fold=config.num_fold)
 test_data = load_split_data(data_path=config.test_data_path, title_path=config.title_path)
 
-# get model
-tokenizer = AutoTokenizer.from_pretrained(config.model_path)
-print(tokenizer)
-
 # training phase
 if config.is_training:
+    tokenizer = AutoTokenizer.from_pretrained(config.model_path)
     oof_df = pd.DataFrame()
     for fold in range(config.num_fold):
         sub_train_data = train_data[train_data["fold"] != fold].reset_index(drop=True)
@@ -96,26 +95,30 @@ if config.is_training:
     oof_df.to_csv(os.path.join(config.save_path, "oof_df.csv"))
 
 
-# # inference phase
-# if config.is_evaluation:
-#     predictions = []
+# inference phase
+if config.is_evaluation:
+    predictions = []
 
-#     for fold in range(config.num_fold):
-#         test_set = PatentDataset(data=test_data, is_training=False)
-#         model = AutoModelForSequenceClassification.from_pretrained(config, num_labels=1)
-#         trainer = Trainer(
-#                 model,
-#                 tokenizer=tokenizer
-#             )
+    for fold in range(config.num_fold):
+        model_path = os.path.join(config.model_path, f"uspp2pm_{fold}")
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        test_set = PatentDataset(data=test_data, is_training=False)
+        test_set.set_tokenizer(tokenizer)
+        
+        model = AutoModelForSequenceClassification.from_pretrained(model_path, num_labels=1)
+        trainer = Trainer(
+                model,
+                tokenizer=tokenizer
+            )
 
-#         outputs = trainer.predict(test_set)
-#         prediction = outputs.predictions.reshape(-1)
-#         predictions.append(prediction)
+        outputs = trainer.predict(test_set)
+        prediction = outputs.predictions.reshape(-1)
+        predictions.append(prediction)
     
-#     predictions = np.mean(predictions, axis=0)
-    # submission = datasets.Dataset.from_dict({
-    #     'id': test_set['id'],
-    #     'score': predictions,
-    # })
+    predictions = np.mean(predictions, axis=0)
+    submission = pd.DataFrame(data={
+        'id': test_data['id'],
+        'score': predictions,
+    })
 
-    # submission.to_csv('submission.csv', index=False)
+    submission.to_csv(os.path.join(config.save_path, 'submission.csv'), index=False)
