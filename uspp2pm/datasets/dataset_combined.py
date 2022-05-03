@@ -4,7 +4,7 @@ from sklearn.model_selection import StratifiedKFold
 import numpy as np 
 import uspp2pm.logger as logger
 
-class PatentDataset(Dataset):
+class PatentDatasetCombined(Dataset):
     def __init__(self, data: pd.DataFrame, is_training: bool = True, tokenizer = None):
         super().__init__()
         self.data = data
@@ -36,7 +36,7 @@ class PatentDataset(Dataset):
 
         return output_dict
 
-def load_split_data(data_path: str, title_path: str, num_fold: int = 0) -> pd.DataFrame:
+def load_split_data_combined(data_path: str, title_path: str, num_fold: int = 0) -> pd.DataFrame:
     # Load data
     data = pd.read_csv(data_path)
     title = pd.read_csv(title_path)

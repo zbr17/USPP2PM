@@ -17,7 +17,7 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from transformers import TrainingArguments, Trainer
 import argparse
 
-from uspp2pm.dataset import PatentDataset, load_split_data
+from uspp2pm.datasets import PatentDatasetCombined, load_split_data_combined
 import uspp2pm.logger as logger
 from uspp2pm.utils import compute_metrics
 
@@ -81,8 +81,8 @@ config.model_path = config.model_path_train if config.is_training else config.mo
 logger.config_logger(output_dir=config.save_path)
 
 # get dataset
-train_data = load_split_data(data_path=config.train_data_path, title_path=config.title_path, num_fold=config.num_fold)
-test_data = load_split_data(data_path=config.test_data_path, title_path=config.title_path)
+train_data = load_split_data_combined(data_path=config.train_data_path, title_path=config.title_path, num_fold=config.num_fold)
+test_data = load_split_data_combined(data_path=config.test_data_path, title_path=config.title_path)
 
 # training phase
 if config.is_training:
@@ -91,8 +91,8 @@ if config.is_training:
     for fold in range(config.num_fold):
         sub_train_data = train_data[train_data["fold"] != fold].reset_index(drop=True)
         sub_val_data = train_data[train_data["fold"] == fold].reset_index(drop=True)
-        sub_train_set = PatentDataset(data=sub_train_data, is_training=True)
-        sub_val_set = PatentDataset(data=sub_val_data, is_training=True)
+        sub_train_set = PatentDatasetCombined(data=sub_train_data, is_training=True)
+        sub_val_set = PatentDatasetCombined(data=sub_val_data, is_training=True)
         sub_train_set.set_tokenizer(tokenizer)
         sub_val_set.set_tokenizer(tokenizer)
 
@@ -120,7 +120,7 @@ if config.is_training:
         )
 
         trainer.train()
-        trainer.save_model(f"uspp2pm_{fold}")
+        trainer.save_model(os.path.join(config.save_path, f"uspp2pm_{fold}"))
 
         outputs = trainer.predict(sub_val_set)
         predictions = outputs.predictions.reshape(-1)
@@ -143,7 +143,7 @@ if config.is_evaluation:
     for fold in range(config.num_fold):
         model_path = os.path.join(config.model_path, f"uspp2pm_{fold}")
         tokenizer = AutoTokenizer.from_pretrained(model_path)
-        test_set = PatentDataset(data=test_data, is_training=False)
+        test_set = PatentDatasetCombined(data=test_data, is_training=False)
         test_set.set_tokenizer(tokenizer)
         
         model = AutoModelForSequenceClassification.from_pretrained(model_path, num_labels=1)
