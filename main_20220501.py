@@ -1,6 +1,18 @@
+#%%
 import os
+import sys
+import socket
+hostname = socket.gethostname()
+if hostname != "zebra":
+    is_kaggle = True
+    sys.path.append("/kaggle/input/uspp2pm")
+else:
+    is_kaggle = False
+
+#%%
 import pandas as pd
 import numpy as np
+import datetime
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from transformers import TrainingArguments, Trainer
 import argparse
@@ -11,31 +23,60 @@ from uspp2pm.utils import compute_metrics
 
 os.environ["WANDB_DISABLED"] = "true"
 
+#%%
 class config:
+    outprefix = "." if hostname == "zebra" else "/kaggle/working"
     # dataset
-    input_path = "./data/uspp2pm"
-    title_path = "./data/cpcs/titles.csv"
-    # model_path = "./pretrains/deberta-v3-large"
-    model_path = "./out/test/"
+    input_path = (
+        "./data/uspp2pm" if not is_kaggle
+        else "/kaggle/input/us-patent-phrase-to-phrase-matching"
+    )
+    title_path = (
+        "./data/cpcs/titles.csv" if not is_kaggle
+        else "/kaggle/input/uspp2pm/data/cpcs/titles.csv"
+    )
     train_data_path = os.path.join(input_path, "train.csv")
     test_data_path = os.path.join(input_path, "test.csv")
+
+    # models
+    ## training model
+    pretrain_name = "deberta-v3-large"
+    model_path_train = (
+        f"./pretrains/{pretrain_name}" if not is_kaggle
+        else f"/kaggle/input/uspp2pm/pretrains/{pretrain_name}"
+    )
+    ## test model
+    infer_name = "test"
+    model_path_infer = (
+        f"./out/{infer_name}/" if not is_kaggle
+        else f"/kaggle/input/uspp2pm/out/{infer_name}"
+    )
+
     # training
     lr = 2e-5
     wd = 0.01
     num_fold = 5
     epochs = 5
     bs = 16
+
     # log
-    save_path = "./out/test/"
+    tag = "v1"
+    save_name = f"PRE{pretrain_name}-TAG{tag}-{datetime.datetime.now().strftime('%Y%m%d')}"
+    save_path = (
+        f"./out/{save_name}/" if not is_kaggle
+        else f"/kaggle/working/"
+    )
 
 parser = argparse.ArgumentParser("US patent model")
 parser.add_argument("--evaluate", action="store_true")
 
-opt = parser.parse_args()
-opt.evaluate = True
+opt = parser.parse_args(args=[])
+opt.evaluate = False
 config.is_training = not opt.evaluate
 config.is_evaluation = opt.evaluate
+config.model_path = config.model_path_train if config.is_training else config.model_path_infer
 
+#%%
 # initiate logger
 logger.config_logger(output_dir=config.save_path)
 
