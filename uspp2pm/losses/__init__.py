@@ -1,12 +1,12 @@
 from torch.nn import MSELoss
-# from .shift_mse import ShiftMSE
+from .shift_mse import ShiftMSE
 
 _loss_dict = {
-    "deberta-v3-large": MSELoss,
-    "deberta-v3-base": MSELoss
+    "mse": MSELoss,
+    "shift_mse": ShiftMSE
 }
 
 def give_criterion(config):
-    _meta_loss = _loss_dict[config.pretrain_name]
+    _meta_loss = _loss_dict[config.loss_name]
     loss_func = _meta_loss()
     return loss_func

@@ -26,7 +26,7 @@ def update_config(config):
     )
     config.model_path = config.model_path_train if config.is_training else config.model_path_infer
     # log
-    config.save_name = f"PRE{config.pretrain_name}-TAG{config.tag}-{datetime.datetime.now().strftime('%Y%m%d')}"
+    config.save_name = f"PRE{config.pretrain_name}-LOSS{config.loss_name}-TAG{config.tag}-{datetime.datetime.now().strftime('%Y%m%d')}"
     config.save_path = (
         f"./out/{config.save_name}/" if not config.is_kaggle
         else f"/kaggle/working/"

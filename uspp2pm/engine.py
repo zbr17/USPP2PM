@@ -64,7 +64,7 @@ def train_one_epoch(
         optimizer.step()
         loss_meter.append(loss.item())
 
-        pred_list.append(sim.detach())
+        pred_list.append(process_out(sim.detach(), config))
         labels_list.append(labels)
 
         if idx % 10 == 0:
@@ -91,8 +91,13 @@ def predict(
             sim = model(**inputs)
             pred = sim
 
-            pred_list.append(pred.cpu())
+            pred_list.append(process_out(pred.cpu(), config))
             labels_list.append(labels)
     return torch.cat(pred_list, dim=0).cpu().numpy(), torch.cat(labels_list, dim=0).cpu().numpy()
 
-
+def process_out(data, config):
+    if config.loss_name == "mse":
+        return data
+    elif config.loss_name == "shift_mse":
+        data = torch.floor(data * 5) * 0.25
+        return data

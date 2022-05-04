@@ -29,7 +29,7 @@ class config:
     device = torch.device("cuda:0")
     dataset_name = "combined"
     # losses
-    loss_name = "mse" # mse / shift_mse
+    loss_name = "shift_mse" # mse / shift_mse
     # models
     model_config = {
         "deberta-v3-large": {"embed_dim": 512},
