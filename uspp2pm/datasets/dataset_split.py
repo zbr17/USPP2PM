@@ -5,9 +5,10 @@ import numpy as np
 import uspp2pm.logger as logger
 
 class PatentDatasetSplit(Dataset):
-    def __init__(self, data: pd.DataFrame, is_training: bool = True):
+    def __init__(self, data: pd.DataFrame, is_training: bool = True, tokenizer = None):
         super().__init__()
         self.data = data
+        self.tokenizer = tokenizer
 
         self.is_training = is_training
         self.anchors = data["anchor"].values.astype(str)
@@ -28,6 +29,7 @@ class PatentDatasetSplit(Dataset):
 
         if self.is_training:
             output_dict["labels"] = self.labels[idx]
+        raise NotImplementedError # FIXME
 
         return output_dict
 

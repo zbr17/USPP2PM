@@ -1,15 +1,10 @@
 from .dataset_combined import PatentDatasetCombined, load_split_data_combined
 from .dataset_split import PatentDatasetSplit, load_split_data_split
-from .collate_fn import DataCollatorCombined
+from .collate_fn import DataCollatorWithPadding
 
 _dataset_dict = {
     "combined": PatentDatasetCombined,
     "split": PatentDatasetSplit
-}
-
-_collate_dict = {
-    "combined": DataCollatorCombined,
-    "split": None # FIXME
 }
 
 _rawdata_dict = {
@@ -26,11 +21,10 @@ def give_rawdata(flag, config):
     return rawdata
 
 def give_collate_fn(tokenizer, config):
-    _meta_collate_fn = _collate_dict[config.dataset_name]
-    collate_fn = _meta_collate_fn(tokenizer)
+    collate_fn = DataCollatorWithPadding(tokenizer)
     return collate_fn
 
-def give_dataset(raw_data, is_training, config):
+def give_dataset(raw_data, is_training, tokenizer, config):
     _meta_dataset = _dataset_dict[config.dataset_name]
-    dataset = _meta_dataset(data=raw_data, is_training=is_training)
+    dataset = _meta_dataset(data=raw_data, is_training=is_training, tokenizer=tokenizer)
     return dataset

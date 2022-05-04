@@ -1,16 +1,10 @@
+from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.init as init
 import torch.nn.functional as F
 import math
 from transformers.models.deberta_v2 import DebertaV2ForSequenceClassification
-# from DeBERTa import deberta
-
-# 'base' 'large' 'base-mnli' 'large-mnli' 'xlarge' 'xlarge-mnli' 'xlarge-v2' 'xxlarge-v2'
-# _pre_trained = {
-#     "deberta-v3-large": "large",
-#     "deberta-v3-base": "base"
-# }
 
 class DeBertaPP2PCombined(nn.Module):
     """
@@ -24,22 +18,28 @@ class DeBertaPP2PCombined(nn.Module):
         # get args
         cache_dir = config.model_path
         # initialize
-        self.deberta = DebertaV2ForSequenceClassification.from_pretrained(
+        self.model = DebertaV2ForSequenceClassification.from_pretrained(
             pretrained_model_name_or_path=cache_dir,
             num_labels=1
         )
-
-        self.deberta.apply_state(cache_dir=cache_dir)
-
-        # self.init_model(pretrained)
-        # self.embedder = nn.Linear(self.output_dim, 1)
     
     def forward(
         self,
-        input
+        input_ids: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        token_type_ids: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        embed = self.deberta(**input)["hidden_states"][-1]
-        return embed
+        outputs = self.model.deberta(
+            input_ids,
+            token_type_ids=token_type_ids,
+            attention_mask=attention_mask
+        )
+
+        encoder_layer = outputs[0]
+        pooled_output = self.model.pooler(encoder_layer)
+        pooled_output = self.model.dropout(pooled_output)
+        logits = self.model.classifier(pooled_output)
+        return logits.squeeze()
 
 # class Mlp(nn.Module):
 #     def __init__(self, size_list=[7,64,2]):

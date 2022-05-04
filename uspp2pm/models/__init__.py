@@ -1,6 +1,6 @@
 from .deberta_pp2p import DeBertaPP2PCombined
 
-from .deberta_tokenizer import DebertaTokenizer
+from .deberta_tokenizer import give_deberta_tokenizer
 
 _model_dict = {
     "combined": {
@@ -9,11 +9,9 @@ _model_dict = {
     }
 }
 
-
-
 _tokenizer_dict = {
-    "deberta-v3-large": DebertaTokenizer,
-    "deberta-v3-base": DebertaTokenizer
+    "deberta-v3-large": give_deberta_tokenizer,
+    "deberta-v3-base": give_deberta_tokenizer
 }
 
 def give_tokenizer(config):

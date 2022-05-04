@@ -5,9 +5,10 @@ import numpy as np
 import uspp2pm.logger as logger
 
 class PatentDatasetCombined(Dataset):
-    def __init__(self, data: pd.DataFrame, is_training: bool = True):
+    def __init__(self, data: pd.DataFrame, is_training: bool = True, tokenizer = None):
         super().__init__()
         self.data = data
+        self.tokenizer = tokenizer
 
         self.is_training = is_training
         self.inputs = data["input"].values.astype(str)
@@ -19,7 +20,7 @@ class PatentDatasetCombined(Dataset):
     
     def __getitem__(self, idx) -> dict:
         output_dict = {
-            "inputs": self.inputs[idx],
+            "inputs": self.tokenizer(self.inputs[idx]),
         }
         
         if self.is_training:

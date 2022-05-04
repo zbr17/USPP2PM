@@ -51,13 +51,11 @@ def train_one_epoch(
     labels_list = []
 
     for idx, data_info in enumerate(train_iter):
-        data_a = preprocess_data(data_info["inputs"], config)
-        # data_t = preprocess_data(data_info["targets"], config)
-        # data_c = preprocess_data(data_info["contexts"], config)
+        inputs = preprocess_data(data_info["inputs"], config)
         labels = preprocess_data(data_info["labels"], config)
 
         # get similarity
-        sim = model(data_a)
+        sim = model(**inputs)
         loss = criterion(sim, labels)
 
         # update
@@ -66,7 +64,7 @@ def train_one_epoch(
         optimizer.step()
         loss_meter.append(loss.item())
 
-        pred_list.append(output_mapping(sim).detach())
+        pred_list.append(sim.detach())
         labels_list.append(labels)
 
         if idx % 10 == 0:
@@ -86,24 +84,15 @@ def predict(
     labels_list = []
     with torch.no_grad():
         for data_info in val_iter:
-            data_a = preprocess_data(data_info, config)
-            # data_t = preprocess_data(data_info["targets"], config)
-            # data_c = preprocess_data(data_info["contexts"], config)
-            labels = data_a.pop("labels")
+            inputs = preprocess_data(data_info["inputs"], config)
+            labels = preprocess_data(data_info["labels"], config)
             
             # get similarity
-            sim = model(data_a)
-            pred = output_mapping(sim)
+            sim = model(**inputs)
+            pred = sim
 
             pred_list.append(pred.cpu())
             labels_list.append(labels)
     return torch.cat(pred_list, dim=0).cpu().numpy(), torch.cat(labels_list, dim=0).cpu().numpy()
-
-def output_mapping(output):
-    """
-    NOTE: Only suitable for ShiftMSE Loss
-    """
-    output = torch.floor(5 * output - 1e-8) * 0.25
-    return output
 
 
