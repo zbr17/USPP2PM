@@ -4,28 +4,26 @@ import torch
 from typing import Mapping
 from torch.utils.data.dataloader import DataLoader
 from tqdm import tqdm
-# from .collate_fn import DataCollatorWithPadding
-from transformers.data.data_collator import DataCollatorWithPadding
 from .utils import LogMeter
 
-def give_train_loader(train_set, config):
+def give_train_loader(collate_fn, train_set, config):
     train_loader = DataLoader(
         dataset=train_set,
         batch_size=config.bs,
         shuffle=True,
         num_workers=config.num_workers,
-        collate_fn=DataCollatorWithPadding(config.tokenizer),
+        collate_fn=collate_fn,
         drop_last=True
     )
     return train_loader
 
-def give_test_loader(test_set, config):
+def give_test_loader(collate_fn, test_set, config):
     test_loader = DataLoader(
         dataset=test_set,
         batch_size=config.bs,
         shuffle=False,
         num_workers=config.num_workers,
-        collate_fn=DataCollatorWithPadding(config.tokenizer),
+        collate_fn=collate_fn,
         drop_last=False
     )
     return test_loader
@@ -40,23 +38,23 @@ def preprocess_data(data, config):
     return data
 
 def train_one_epoch(
-    model, criterion, train_set, optimizer, scheduler, config
+    model, criterion, collate_fn, train_set, optimizer, scheduler, config
 ):
     model.train()
     criterion.train()
     loss_meter = LogMeter()
     # get dataloader
-    train_loader = give_train_loader(train_set, config)
+    train_loader = give_train_loader(collate_fn, train_set, config)
     train_iter = tqdm(train_loader)
 
     pred_list = []
     labels_list = []
 
     for idx, data_info in enumerate(train_iter):
-        data_a = preprocess_data(data_info, config)
+        data_a = preprocess_data(data_info["inputs"], config)
         # data_t = preprocess_data(data_info["targets"], config)
         # data_c = preprocess_data(data_info["contexts"], config)
-        labels = data_a.pop("labels").float()
+        labels = preprocess_data(data_info["labels"], config)
 
         # get similarity
         sim = model(data_a)
@@ -77,11 +75,11 @@ def train_one_epoch(
     return torch.cat(pred_list, dim=0).cpu().numpy(), torch.cat(labels_list, dim=0).cpu().numpy()
 
 def predict(
-    model, val_set, config
+    model, collate_fn, val_set, config
 ):
     model.eval()
     # get dataloader
-    val_loader = give_train_loader(val_set, config)
+    val_loader = give_test_loader(collate_fn, val_set, config)
     val_iter = tqdm(val_loader)
     
     pred_list = []

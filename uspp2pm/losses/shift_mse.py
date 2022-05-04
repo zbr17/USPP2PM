@@ -7,6 +7,7 @@ class ShiftMSE(nn.Module):
         self.loss_func = nn.MSELoss()
         self.scale = scale
         self.bias = bias
+        raise NotImplementedError # FIXME
     
     def forward(self, data: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         shift_target = self.scale * target + self.bias

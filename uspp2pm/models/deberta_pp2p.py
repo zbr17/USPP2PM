@@ -2,8 +2,44 @@ import torch
 import torch.nn as nn
 import torch.nn.init as init
 import torch.nn.functional as F
-from transformers import AutoModelForSequenceClassification
 import math
+from transformers.models.deberta_v2 import DebertaV2ForSequenceClassification
+# from DeBERTa import deberta
+
+# 'base' 'large' 'base-mnli' 'large-mnli' 'xlarge' 'xlarge-mnli' 'xlarge-v2' 'xxlarge-v2'
+# _pre_trained = {
+#     "deberta-v3-large": "large",
+#     "deberta-v3-base": "base"
+# }
+
+class DeBertaPP2PCombined(nn.Module):
+    """
+    Without dropout in the final layer.
+    """
+    def __init__(
+        self, 
+        config
+    ):
+        super().__init__()
+        # get args
+        cache_dir = config.model_path
+        # initialize
+        self.deberta = DebertaV2ForSequenceClassification.from_pretrained(
+            pretrained_model_name_or_path=cache_dir,
+            num_labels=1
+        )
+
+        self.deberta.apply_state(cache_dir=cache_dir)
+
+        # self.init_model(pretrained)
+        # self.embedder = nn.Linear(self.output_dim, 1)
+    
+    def forward(
+        self,
+        input
+    ) -> torch.Tensor:
+        embed = self.deberta(**input)["hidden_states"][-1]
+        return embed
 
 # class Mlp(nn.Module):
 #     def __init__(self, size_list=[7,64,2]):
@@ -106,34 +142,3 @@ import math
 #             sim = F.cosine_similarity(embed_ac, embed_tc, dim=-1)
 #             sim = 0.5 * (sim + 1) # Rescale to [0,1]
 #             return sim
-
-class DeBertaPP2P(nn.Module):
-    """
-    Without dropout in the final layer.
-    """
-    def __init__(
-        self, 
-        pretrained: str = None, 
-        embed_dim: int = 512
-    ):
-        super().__init__()
-        self.init_model(pretrained)
-        self.embedder = nn.Linear(self.output_dim, 1)
-    
-    def init_model(self, pretrained):
-        model = AutoModelForSequenceClassification.from_pretrained(pretrained, num_labels=1)
-        self.deberta = model.deberta
-        self.pooler = model.pooler
-        self.dropout = model.dropout # NOTE: Not used!
-        self.output_dim = model.pooler.output_dim
-    
-    def forward(
-        self,
-        input
-    ) -> torch.Tensor:
-        # Compute embeddings
-        out_a = self.deberta(**input)[0]
-        pooled_a = self.pooler(out_a)
-        pooled_a = self.dropout(pooled_a)
-        embed_a = self.embedder(pooled_a)
-        return torch.sigmoid(embed_a)

@@ -5,29 +5,22 @@ import numpy as np
 import uspp2pm.logger as logger
 
 class PatentDatasetCombined(Dataset):
-    def __init__(self, data: pd.DataFrame, is_training: bool = True, tokenizer = None):
+    def __init__(self, data: pd.DataFrame, is_training: bool = True):
         super().__init__()
         self.data = data
-        self.tokenizer = tokenizer
 
         self.is_training = is_training
         self.inputs = data["input"].values.astype(str)
         if self.is_training:
             self.labels = data["score"].values
     
-    def set_tokenizer(self, tokenizer):
-        self.tokenizer = tokenizer
-    
     def __len__(self) -> int:
         return len(self.inputs)
     
     def __getitem__(self, idx) -> dict:
-        if self.tokenizer is None:
-            output_dict = {
-                "inputs": self.inputs[idx],
-            }
-        else:
-            output_dict = {**self.tokenizer(self.inputs[idx])}
+        output_dict = {
+            "inputs": self.inputs[idx],
+        }
         
         if self.is_training:
             output_dict["labels"] = self.labels[idx]

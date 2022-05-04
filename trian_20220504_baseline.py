@@ -19,9 +19,10 @@ import argparse
 from uspp2pm import config_dependencies
 config_dependencies(is_kaggle)
 from uspp2pm import logger
-from uspp2pm.utils import compute_metrics, give_optimizer, update_config
-from uspp2pm.datasets import give_rawdata, give_collate_fn
+from uspp2pm.utils import compute_metrics, update_config
+from uspp2pm.datasets import give_rawdata, give_collate_fn, give_dataset
 from uspp2pm.models import give_tokenizer, give_model
+from uspp2pm.optimizers import give_optim
 from uspp2pm.losses import give_criterion
 from uspp2pm.engine import train_one_epoch, predict
 
@@ -31,7 +32,8 @@ class config:
     dataset_name = "combined"
     # models
     model_config = {
-        "deberta-v3-large": {"embed_dim": 512}
+        "deberta-v3-large": {"embed_dim": 512},
+        "deberta-v3-base": {"embed_dim": 512}
     }
     pretrain_name = "deberta-v3-large"
     infer_name = "test"
@@ -40,7 +42,7 @@ class config:
     wd = 0.01
     num_fold = 4
     epochs = 10
-    bs = 16
+    bs = 8
     num_workers = 12
     lr_multi = 10
     sche_step = 5
@@ -63,9 +65,10 @@ config = update_config(config)
 logger.config_logger(output_dir=config.save_path)
 
 # get dataset
-train_data, test_data = give_rawdata(config), give_rawdata(config)
-collate_fn = give_collate_fn(config)
+train_data, test_data = give_rawdata("train", config), give_rawdata("test", config)
 tokenizer = give_tokenizer(config)
+collate_fn = give_collate_fn(tokenizer, config)
+
 
 # training phase
 if config.is_training:
@@ -73,35 +76,21 @@ if config.is_training:
     for fold in range(config.num_fold):
         sub_train_data = train_data[train_data["fold"] != fold].reset_index(drop=True)
         sub_val_data = train_data[train_data["fold"] == fold].reset_index(drop=True)
-        sub_train_set = PatentDataset(data=sub_train_data, is_training=True)
-        sub_val_set = PatentDataset(data=sub_val_data, is_training=True)
-        sub_train_set.set_tokenizer(tokenizer)
-        sub_val_set.set_tokenizer(tokenizer)
+        sub_train_set = give_dataset(sub_train_data, True, config)
+        sub_val_set = give_dataset(sub_val_data, False, config)
 
-        # get model
-        model_config = config.model_config[config.pretrain_name]
-        model_config["pretrained"] = config.model_path
-        model = give_model(config.pretrain_name, model_config)
-
-        # get criterion
-        criterion = give_criterion(config.pretrain_name)
+        # get model and criterion
+        model = give_model(config).to(config.device)
+        criterion = give_criterion(config).to(config.device)
 
         # get optimizer and scheduler
-        optim_config = {
-            "lr": config.lr, "wd": config.wd, "lr_multi": config.lr_multi,
-            "sche_step": config.sche_step, "sche_decay": config.sche_decay
-        }
-        optimizer, scheduler = give_optimizer(config.pretrain_name, model, optim_config)
-
-        # model-to-device
-        model = model.to(config.device)
-        criterion = criterion.to(config.device)
+        optimizer, scheduler = give_optim(model, config)
 
         for epoch in range(config.epochs):
             logger.info(f"Epoch: {epoch}")
             # Start to train
             logger.info("Start to train...")
-            preds, labels = train_one_epoch(model, criterion, sub_train_set, optimizer, scheduler, config)
+            preds, labels = train_one_epoch(model, criterion, collate_fn, sub_train_set, optimizer, scheduler, config)
             sub_acc = compute_metrics((preds, labels))
             logger.info(f"TrainSET - Fold: {fold}, Epoch: {epoch}, Acc: {sub_acc}")
             to_save_dict = {

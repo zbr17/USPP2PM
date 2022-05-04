@@ -5,10 +5,9 @@ import numpy as np
 import uspp2pm.logger as logger
 
 class PatentDatasetSplit(Dataset):
-    def __init__(self, data: pd.DataFrame, is_training: bool = True, tokenizer = None):
+    def __init__(self, data: pd.DataFrame, is_training: bool = True):
         super().__init__()
         self.data = data
-        self.tokenizer = tokenizer
 
         self.is_training = is_training
         self.anchors = data["anchor"].values.astype(str)
@@ -16,9 +15,6 @@ class PatentDatasetSplit(Dataset):
         self.contexts = data["title"].values.astype(str)
         if self.is_training:
             self.labels = data["score"].values
-    
-    def set_tokenizer(self, tokenizer):
-        self.tokenizer = tokenizer
     
     def __len__(self) -> int:
         return len(self.anchors)
@@ -29,12 +25,7 @@ class PatentDatasetSplit(Dataset):
             "targets": self.targets[idx],
             "contexts": self.contexts[idx]
         }
-        if self.tokenizer is not None:
-            output_dict = {
-                k: self.tokenizer(v)
-                for k, v in output_dict.items()
-            }
-        
+
         if self.is_training:
             output_dict["labels"] = self.labels[idx]
 

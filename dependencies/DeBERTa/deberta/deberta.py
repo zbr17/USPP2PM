@@ -35,11 +35,11 @@ class DeBERTa(torch.nn.Module):
 
   """
 
-  def __init__(self, config=None, pre_trained=None):
+  def __init__(self, config=None, pre_trained=None, cache_dir=None):
     super().__init__()
     state = None
     if pre_trained is not None:
-      state, model_config = load_model_state(pre_trained)
+      state, model_config = load_model_state(pre_trained, cache_dir=cache_dir)
       if config is not None and model_config is not None:
         for k in config.__dict__:
           if k not in ['hidden_size',
@@ -118,7 +118,7 @@ class DeBERTa(torch.nn.Module):
     encoder_output.update(ebd_output)
     return encoder_output
 
-  def apply_state(self, state = None):
+  def apply_state(self, state = None, cache_dir = None):
     """ Load state from previous loaded model state dictionary.
 
       Args:
@@ -129,7 +129,7 @@ class DeBERTa(torch.nn.Module):
     if self.pre_trained is None and state is None:
       return
     if state is None:
-      state, config = load_model_state(self.pre_trained)
+      state, config = load_model_state(self.pre_trained, cache_dir=cache_dir)
       self.config = config
     
     prefix = ''

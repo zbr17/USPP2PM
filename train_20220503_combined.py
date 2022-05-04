@@ -40,9 +40,10 @@ class config:
     test_data_path = os.path.join(input_path, "test.csv")
 
     # models
-    model_config = {
-        "deberta-v3-large": {"embed_dim": 512}
-    }
+    # model_config = {
+    #     "deberta-v3-large": {"embed_dim": 512},
+    #     "deberta-v3-base": {"embed_dim": 512}
+    # }
     ## training model
     pretrain_name = "deberta-v3-large"
     model_path_train = (
