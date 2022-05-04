@@ -35,7 +35,7 @@ def add_params(model_list, is_include=True):
             params_list += [p for n, p in module.named_parameters() if n not in decay_parameters]
     return params_list
 
-def give_optimizer(pretrain_name: str, model: nn.Module, optim_config: dict):
+def give_optimizer_v0(pretrain_name: str, model: nn.Module, optim_config: dict):
     if pretrain_name == "deberta-v3-large":
         optim_args = []
         base_lr = optim_config["lr"]
@@ -65,6 +65,29 @@ def give_optimizer(pretrain_name: str, model: nn.Module, optim_config: dict):
         optim_args.append({
             "params": add_params(model.new_model_list, is_include=False),
             "lr": multi_lr,
+            "weight_decay": 0.0
+        })
+
+        optimizer = optim.AdamW(params=optim_args)
+        scheduler = lr_scheduler.StepLR(optimizer, step_size=optim_config["sche_step"], gamma=optim_config["sche_decay"])
+    
+    return optimizer, scheduler
+
+def give_optimizer(pretrain_name: str, model: nn.Module, optim_config: dict):
+    if pretrain_name == "deberta-v3-large":
+        optim_args = []
+        base_lr = optim_config["lr"]
+        # fundational params
+        optim_args.append({
+            "params": add_params([model], is_include=True),
+            "lr": base_lr,
+            "weight_decay": optim_config["wd"]
+        })
+
+        # fundational params (no wd)
+        optim_args.append({
+            "params": add_params([model], is_include=False),
+            "lr": base_lr,
             "weight_decay": 0.0
         })
 

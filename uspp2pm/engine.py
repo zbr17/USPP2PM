@@ -4,7 +4,8 @@ import torch
 from typing import Mapping
 from torch.utils.data.dataloader import DataLoader
 from tqdm import tqdm
-from .collate_fn import DataCollatorWithPadding
+# from .collate_fn import DataCollatorWithPadding
+from transformers.data.data_collator import DataCollatorWithPadding
 from .utils import LogMeter
 
 def give_train_loader(train_set, config):
@@ -43,8 +44,7 @@ def train_one_epoch(
 ):
     model.train()
     criterion.train()
-    loss1_meter = LogMeter()
-    loss2_meter = LogMeter()
+    loss_meter = LogMeter()
     # get dataloader
     train_loader = give_train_loader(train_set, config)
     train_iter = tqdm(train_loader)
@@ -53,28 +53,26 @@ def train_one_epoch(
     labels_list = []
 
     for idx, data_info in enumerate(train_iter):
-        data_a = preprocess_data(data_info["anchors"], config)
-        data_t = preprocess_data(data_info["targets"], config)
-        data_c = preprocess_data(data_info["contexts"], config)
-        labels = preprocess_data(data_info["labels"], config).float()
+        data_a = preprocess_data(data_info, config)
+        # data_t = preprocess_data(data_info["targets"], config)
+        # data_c = preprocess_data(data_info["contexts"], config)
+        labels = data_a.pop("labels").float()
 
         # get similarity
-        sim = model(data_a, data_t, data_c)
-        loss_sim, loss_sim_inter = criterion(sim, labels)
-        loss = loss_sim + loss_sim_inter
+        sim = model(data_a)
+        loss = criterion(sim, labels)
 
         # update
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        loss1_meter.append(loss_sim.item())
-        loss2_meter.append(loss_sim_inter.item())
+        loss_meter.append(loss.item())
 
-        pred_list.append(output_mapping(sim[0]).detach())
+        pred_list.append(output_mapping(sim).detach())
         labels_list.append(labels)
 
         if idx % 10 == 0:
-            train_iter.set_description(f"Loss-sim={loss1_meter.avg()}, Loss-sim-inter:{loss2_meter.avg()}")
+            train_iter.set_description(f"Loss={loss_meter.avg()}")
     scheduler.step()
     return torch.cat(pred_list, dim=0).cpu().numpy(), torch.cat(labels_list, dim=0).cpu().numpy()
 
@@ -90,13 +88,13 @@ def predict(
     labels_list = []
     with torch.no_grad():
         for data_info in val_iter:
-            data_a = preprocess_data(data_info["anchors"], config)
-            data_t = preprocess_data(data_info["targets"], config)
-            data_c = preprocess_data(data_info["contexts"], config)
-            labels = data_info["labels"]
+            data_a = preprocess_data(data_info, config)
+            # data_t = preprocess_data(data_info["targets"], config)
+            # data_c = preprocess_data(data_info["contexts"], config)
+            labels = data_a.pop("labels")
             
             # get similarity
-            sim = model(data_a, data_t, data_c)
+            sim = model(data_a)
             pred = output_mapping(sim)
 
             pred_list.append(pred.cpu())

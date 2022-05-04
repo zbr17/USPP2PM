@@ -9,7 +9,8 @@ class ShiftMSE(nn.Module):
         self.bias = bias
     
     def forward(self, data: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        loss = self.loss_func(data, target)
+        shift_target = self.scale * target + self.bias
+        loss = self.loss_func(data, shift_target)
         return loss
 
 # class ShiftMSE(nn.Module):
