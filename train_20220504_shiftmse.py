@@ -93,7 +93,7 @@ if config.is_training:
             sub_acc = compute_metrics((preds, labels))
             logger.info(f"TrainSET - Fold: {fold}, Epoch: {epoch}, Acc: {sub_acc}")
             to_save_dict = {
-                "model": model,
+                "model": model.state_dict(),
                 "criterion": criterion,
                 "optimizer": optimizer,
                 "scheduler": scheduler,
@@ -115,31 +115,3 @@ if config.is_training:
     final_acc = compute_metrics((preds_all, labels_all))
     logger.info(f"Final acc: {final_acc}")
     final_result = pd.DataFrame()
-
-# inference phase
-# if config.is_evaluation:
-#     predictions = []
-
-#     for fold in range(config.num_fold):
-#         model_path = os.path.join(config.model_path, f"uspp2pm_{fold}")
-#         tokenizer = AutoTokenizer.from_pretrained(model_path)
-#         test_set = PatentDataset(data=test_data, is_training=False)
-#         test_set.set_tokenizer(tokenizer)
-        
-#         model = AutoModelForSequenceClassification.from_pretrained(model_path, num_labels=1)
-#         trainer = Trainer(
-#                 model,
-#                 tokenizer=tokenizer
-#             )
-
-#         outputs = trainer.predict(test_set)
-#         prediction = outputs.predictions.reshape(-1)
-#         predictions.append(prediction)
-    
-#     predictions = np.mean(predictions, axis=0)
-#     submission = pd.DataFrame(data={
-#         'id': test_data['id'],
-#         'score': predictions,
-#     })
-
-#     submission.to_csv(os.path.join(config.save_path, 'submission.csv'), index=False)

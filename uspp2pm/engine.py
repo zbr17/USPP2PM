@@ -73,7 +73,7 @@ def train_one_epoch(
     return torch.cat(pred_list, dim=0).cpu().numpy(), torch.cat(labels_list, dim=0).cpu().numpy()
 
 def predict(
-    model, collate_fn, val_set, config
+    model, collate_fn, val_set, config, is_test=False
 ):
     model.eval()
     # get dataloader
@@ -92,8 +92,12 @@ def predict(
             pred = sim
 
             pred_list.append(process_out(pred.cpu(), config))
-            labels_list.append(labels)
-    return torch.cat(pred_list, dim=0).cpu().numpy(), torch.cat(labels_list, dim=0).cpu().numpy()
+            if not is_test:
+                labels_list.append(labels)
+    if not is_test:
+        return torch.cat(pred_list, dim=0).cpu().numpy(), torch.cat(labels_list, dim=0).cpu().numpy()
+    else:
+        return torch.cat(pred_list, dim=0).cpu().numpy()
 
 def process_out(data, config):
     if config.loss_name == "mse":

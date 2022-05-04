@@ -16,15 +16,14 @@ def update_config(config):
     config.train_data_path = os.path.join(config.input_path, "train.csv")
     config.test_data_path = os.path.join(config.input_path, "test.csv")
     # model
-    config.model_path_train = (
+    config.model_path = (
         f"./pretrains/{config.pretrain_name}" if not config.is_kaggle
         else f"/kaggle/input/uspp2pm/pretrains/{config.pretrain_name}"
     )
     config.model_path_infer = (
         f"./out/{config.infer_name}/" if not config.is_kaggle
-        else f"/kaggle/input/uspp2pm/out/{config.infer_name}"
+        else f"/kaggle/input/{config.infer_name}"
     )
-    config.model_path = config.model_path_train if config.is_training else config.model_path_infer
     # log
     config.save_name = f"PRE{config.pretrain_name}-LOSS{config.loss_name}-TAG{config.tag}-{datetime.datetime.now().strftime('%Y%m%d')}"
     config.save_path = (
