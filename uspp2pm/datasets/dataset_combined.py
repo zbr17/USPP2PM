@@ -12,7 +12,6 @@ class PatentDatasetCombined(Dataset):
 
         self.is_training = is_training
         self.inputs = data["input"].values.astype(str)
-        self.targets = data["target"].values.astype(str)
         if self.is_training:
             self.labels = data["score"].values
     
@@ -26,10 +25,9 @@ class PatentDatasetCombined(Dataset):
         if self.tokenizer is None:
             output_dict = {
                 "inputs": self.inputs[idx],
-                "targets": self.targets[idx]
             }
         else:
-            output_dict = {**self.tokenizer(self.inputs[idx], self.targets[idx])}
+            output_dict = {**self.tokenizer(self.inputs[idx])}
         
         if self.is_training:
             output_dict["labels"] = self.labels[idx]
@@ -41,7 +39,7 @@ def load_split_data_combined(data_path: str, title_path: str, num_fold: int = 0)
     data = pd.read_csv(data_path)
     title = pd.read_csv(title_path)
     data = data.merge(title, left_on="context", right_on="code")
-    data["input"] = data["title"] + "[SEP]" + data["anchor"]
+    data["input"] = data["title"] + "[SEP]" + data["anchor"] + "[SEP]" + data["target"]
 
     # Split data
     if num_fold == 0:

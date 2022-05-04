@@ -1,15 +1,7 @@
-from dataclasses import dataclass
 import torch
-from transformers.tokenization_utils_base import PreTrainedTokenizerBase
+import collections
 
-@dataclass
-class DataCollatorWithPadding:
-    tokenizer: PreTrainedTokenizerBase
-    padding = True
-    max_length = None
-    pad_to_multiple_of = None
-    return_tensors: str = "pt"
-
+class DataCollatorWithPaddingSplit:
     def __call__(self, features):
         elem = features[0]
         keys_list = list(elem.keys())
@@ -28,3 +20,11 @@ class DataCollatorWithPadding:
         batch_dict["labels"] = torch.tensor(sub_features)
         
         return batch_dict
+
+class DataCollatorWithPaddingCombined:
+    def __call__(self, batch):
+        elem = batch[0]
+        assert isinstance(elem, collections.abc.Mapping)
+        
+        
+        return batch
