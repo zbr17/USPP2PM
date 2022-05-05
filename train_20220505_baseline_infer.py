@@ -45,7 +45,7 @@ class config:
     sche_step = 5
     sche_decay = 0.5
     # log
-    tag = f"PRE{pretrain_name}-DAT{dataset_name}-LOSS{loss_name}-FOLD{num_fold}"
+    tag = f"PRE{pretrain_name[:5]}-DAT{dataset_name[:5]}-LOSS{loss_name[:5]}-FOLD{num_fold[:5]}"
 
 parser = argparse.ArgumentParser("US patent model")
 parser.add_argument("--evaluate", action="store_true")
