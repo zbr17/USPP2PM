@@ -17,7 +17,7 @@ def give_rawdata(flag, config):
     if flag == "train":
         rawdata = _meta_rawdata_class(data_path=config.train_data_path, title_path=config.title_path, num_fold=config.num_fold)
     else:
-        rawdata = _meta_rawdata_class(data_path=config.train_data_path, title_path=config.title_path, num_fold=0)
+        rawdata = _meta_rawdata_class(data_path=config.test_data_path, title_path=config.title_path, num_fold=0)
     return rawdata
 
 def give_collate_fn(tokenizer, config):

@@ -2,12 +2,13 @@
 import os
 import sys
 import socket
+import datetime
 
 import torch
 hostname = socket.gethostname()
 if hostname != "zebra":
     is_kaggle = True
-    sys.path.append("/kaggle/input/uspp2pm")
+    sys.path.append("/kaggle/input")
 else:
     is_kaggle = False
 
@@ -17,7 +18,7 @@ import numpy as np
 import argparse
 
 from uspp2pm import logger
-from uspp2pm.utils import compute_metrics, update_config
+from uspp2pm.utils import compute_metrics
 from uspp2pm.datasets import give_rawdata, give_collate_fn, give_dataset
 from uspp2pm.models import give_tokenizer, give_model
 from uspp2pm.optimizers import give_optim
@@ -29,18 +30,14 @@ class config:
     device = torch.device("cuda:0")
     dataset_name = "combined"
     # losses
-    loss_name = "mse" # mse / shift_mse
+    loss_name = "pearson" # mse / shift_mse / pearson
     # models
-    model_config = {
-        "deberta-v3-large": {"embed_dim": 512},
-        "deberta-v3-base": {"embed_dim": 512}
-    }
-    pretrain_name = "deberta-v3-base"
-    infer_name = "PREdeberta-v3-base-TAGbaseline-20220504"
+    pretrain_name = "deberta-v3-large" # bert-for-patents / deberta-v3-large
+    infer_name = "20220505-PREdeberta-v3-large-DATcombined-LOSSpearson-FOLD1"
     # training
     lr = 2e-5
     wd = 0.01
-    num_fold = 5
+    num_fold = 1 # 0/1 for training all
     epochs = 10
     bs = 64
     num_workers = 12
@@ -48,7 +45,7 @@ class config:
     sche_step = 5
     sche_decay = 0.5
     # log
-    tag = "baseline"
+    tag = f"PRE{pretrain_name}-DAT{dataset_name}-LOSS{loss_name}-FOLD{num_fold}"
 
 parser = argparse.ArgumentParser("US patent model")
 parser.add_argument("--evaluate", action="store_true")
@@ -58,7 +55,54 @@ opt.evaluate = True
 config.is_kaggle = is_kaggle
 config.is_training = not opt.evaluate
 config.is_evaluation = opt.evaluate
+
+#%%
+def update_config(config):
+    # dataset
+    config.input_path = (
+        "./data/uspp2pm" if not config.is_kaggle
+        else "/kaggle/input/us-patent-phrase-to-phrase-matching"
+    )
+    config.title_path = (
+        "./data/cpcs/titles.csv" if not config.is_kaggle
+        else "/kaggle/input/cpccode/titles.csv"
+    )
+    config.train_data_path = os.path.join(config.input_path, "train.csv")
+    config.test_data_path = os.path.join(config.input_path, "test.csv")
+    # model
+    config.model_path = (
+        f"./pretrains/{config.pretrain_name}" if not config.is_kaggle
+        else f"/kaggle/input/{config.pretrain_name}"
+    )
+    config.model_path_infer = (
+        f"./out/{config.infer_name}/" if not config.is_kaggle
+        else f"/kaggle/input/{config.infer_name}"
+    )
+    # log
+    config.save_name = f"{datetime.datetime.now().strftime('%Y%m%d')}-{config.tag}"
+    config.save_path = (
+        f"./out/{config.save_name}/" if not config.is_kaggle
+        else f"/kaggle/working/"
+    )
+    return config
 config = update_config(config)
+
+#%%
+def run_test(index, test_data, tokenizer, collate_fn, config):
+    test_set = give_dataset(test_data, False, tokenizer, config)
+
+    # get model and criterion
+    model = give_model(config).to(config.device)
+
+    # load parameters
+    params_dict = torch.load(os.path.join(config.model_path_infer, f"model_{index}.ckpt"))
+    model.load_state_dict(params_dict["model"])
+
+    # Evaluate
+    logger.info("Start to validate...")
+    preds = predict(model, collate_fn, test_set, config, is_test=True)
+
+    return preds
 
 #%%
 # initiate logger
@@ -73,19 +117,10 @@ collate_fn = give_collate_fn(tokenizer, config)
 if config.is_evaluation:
     preds_all = []
     for fold in range(config.num_fold):
-        test_set = give_dataset(test_data, False, tokenizer, config)
-
-        # get model and criterion
-        model = give_model(config).to(config.device)
-
-        # load parameters
-        params_dict = torch.load(os.path.join(config.model_path_infer, f"model_{fold}.ckpt"))
-        model.load_state_dict(params_dict["model"])
-
-        # Evaluate
-        logger.info("Start to validate...")
-        preds = predict(model, collate_fn, test_set, config, is_test=True)
-        
+        if config.num_fold < 2:
+            preds = run_test("all", test_data, tokenizer, collate_fn, config)
+        else:
+            preds = run_test(fold, test_data, tokenizer, collate_fn, config)
         preds_all.append(preds)
     
     predictions = np.mean(preds_all, axis=0)

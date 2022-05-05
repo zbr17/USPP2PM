@@ -1,4 +1,5 @@
 from typing import Optional
+from matplotlib.pyplot import isinteractive
 import torch
 import torch.nn as nn
 import torch.nn.init as init
@@ -25,10 +26,12 @@ class DeBertaPP2PCombined(nn.Module):
     
     def forward(
         self,
-        input_ids: Optional[torch.Tensor] = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        token_type_ids: Optional[torch.Tensor] = None,
+        data_info: dict,
     ) -> torch.Tensor:
+        input_ids = data_info["inputs"]["input_ids"]
+        attention_mask = data_info["inputs"]["attention_mask"]
+        token_type_ids = data_info["inputs"]["token_type_ids"]
+
         outputs = self.model.deberta(
             input_ids,
             token_type_ids=token_type_ids,
@@ -39,106 +42,109 @@ class DeBertaPP2PCombined(nn.Module):
         pooled_output = self.model.pooler(encoder_layer)
         pooled_output = self.model.dropout(pooled_output)
         logits = self.model.classifier(pooled_output)
+        logits = torch.sigmoid(logits)
         return logits.squeeze()
 
-# class Mlp(nn.Module):
-#     def __init__(self, size_list=[7,64,2]):
-#         super().__init__()
-#         self.size_list = size_list
-#         self.num_layer = len(self.size_list) - 1
+class Mlp(nn.Module):
+    def __init__(self, size_list=[7,64,2]):
+        super().__init__()
+        self.size_list = size_list
+        self.num_layer = len(self.size_list) - 1
 
-#         self.layer_list = []
-#         for i in range(self.num_layer):
-#             self.layer_list.append(nn.Linear(self.size_list[i], self.size_list[i+1]))
-#             if i != self.num_layer-1:
-#                 # self.layer_list.append(nn.BatchNorm1d(self.size_list[i+1]))
-#                 self.layer_list.append(nn.LeakyReLU(inplace=True))
-#         self.layer_list = nn.ModuleList(self.layer_list)
+        self.layer_list = []
+        for i in range(self.num_layer):
+            self.layer_list.append(nn.Linear(self.size_list[i], self.size_list[i+1]))
+            if i != self.num_layer-1:
+                # self.layer_list.append(nn.BatchNorm1d(self.size_list[i+1]))
+                self.layer_list.append(nn.LeakyReLU(inplace=True))
+        self.layer_list = nn.ModuleList(self.layer_list)
     
-#     def forward(self, x):
-#         for module in self.layer_list:
-#             x = module(x)
-#         return x
+    def forward(self, x):
+        for module in self.layer_list:
+            x = module(x)
+        return x
 
-# class DeBertaPP2P(nn.Module):
-#     """
-#     Without dropout in the final layer.
-#     """
-#     def __init__(
-#         self, 
-#         pretrained: str = None, 
-#         embed_dim: int = 512
-#     ):
-#         super().__init__()
-#         self.embed_dim = embed_dim
-#         self.init_model(pretrained)
-#         self.embedder_a = nn.Linear(self.output_dim, embed_dim)
-#         self.embedder_t = nn.Linear(self.output_dim, embed_dim)
-#         self.embedder_c = nn.Linear(self.output_dim, embed_dim)
-#         self.mlp_ac = Mlp(size_list=[2*embed_dim, 4*embed_dim, 4*embed_dim, embed_dim])
-#         self.mlp_tc = Mlp(size_list=[2*embed_dim, 4*embed_dim, 4*embed_dim, embed_dim])
+class DeBertaPP2PSplit(nn.Module):
+    """
+    Without dropout in the final layer.
+    """
+    def __init__(
+        self, 
+        config
+    ):
+        super().__init__()
+        # get args
+        cache_dir = config.model_path
+        self.embed_dim = config.embed_dim
+        # initialize
+        self.model = DebertaV2ForSequenceClassification.from_pretrained(
+            pretrained_model_name_or_path=cache_dir,
+            num_labels=1
+        )
+        self.output_dim = self.model.pooler.output_dim
+        self.classifier = nn.Linear(3 * self.output_dim, 1)
 
-#         self.base_model_list = [self.deberta, self.pooler, self.dropout]
-#         self.new_model_list = [self.embedder_a, self.embedder_t, self.embedder_c,
-#         self.mlp_ac, self.mlp_tc]
+        # self.embedder_a = nn.Linear(self.output_dim, self.embed_dim)
+        # self.embedder_t = nn.Linear(self.output_dim, self.embed_dim)
+        # self.embedder_c = nn.Linear(self.output_dim, self.embed_dim)
+        # self.mlp_ac = Mlp(size_list=[2*self.embed_dim, self.embed_dim, self.embed_dim])
+        # self.mlp_tc = Mlp(size_list=[2*self.embed_dim, self.embed_dim, self.embed_dim])
+
+        self.base_model_list = [self.model]
+        # self.new_model_list = [
+        #     self.embedder_a, self.embedder_t, self.embedder_c,
+        #     self.mlp_ac, self.mlp_tc
+        # ]
+        self.new_model_list = [
+            self.classifier
+        ]
+        # self.init_weights()
     
-#     def init_weights(self):
-#         def _init_weights(module: nn.Module):
-#             for sub_module in module.modules():
-#                 init.kaiming_normal_(sub_module.weight, a=math.sqrt(5))
-#                 init.zeros_(sub_module.bias)
-#         to_init_list = [
-#             self.embedder_a, self.embedder_t, self.embedder_c,
-#             self.mlp_ac, self.mlp_tc
-#         ]
-#         for module in to_init_list:
-#             _init_weights(module)
+    # def init_weights(self):
+    #     def _init_weights(module: nn.Module):
+    #         for sub_module in module.modules():
+    #             if isinstance(sub_module, nn.Linear):
+    #                 init.kaiming_normal_(sub_module.weight, a=math.sqrt(5))
+    #                 init.zeros_(sub_module.bias)
+    #     to_init_list = [
+    #         self.embedder_a, self.embedder_t, self.embedder_c,
+    #         self.mlp_ac, self.mlp_tc
+    #     ]
+    #     for module in to_init_list:
+    #         _init_weights(module)
     
-#     def init_model(self, pretrained):
-#         model = AutoModelForSequenceClassification.from_pretrained(pretrained, num_labels=1)
-#         self.deberta = model.deberta
-#         self.pooler = model.pooler
-#         self.dropout = model.dropout # NOTE: Not used!
-#         self.output_dim = model.pooler.output_dim
-    
-#     def forward(
-#         self,
-#         input_a: dict,
-#         input_t: dict,
-#         input_c: dict
-#     ) -> torch.Tensor:
-#         # Compute embeddings
-#         out_a = self.deberta(**input_a)[0]
-#         out_t = self.deberta(**input_t)[0]
-#         out_c = self.deberta(**input_c)[0]
+    def forward(
+        self,
+        data_info: dict,
+    ) -> torch.Tensor:
+        input_a = data_info["anchors"]
+        input_t = data_info["targets"]
+        input_c = data_info["contexts"]
 
-#         pooled_a = self.pooler(out_a)
-#         pooled_t = self.pooler(out_t)
-#         pooled_c = self.pooler(out_c)
+        # Compute embeddings
+        out_a = self.model.deberta(**input_a)[0]
+        out_t = self.model.deberta(**input_t)[0]
+        out_c = self.model.deberta(**input_c)[0]
 
-#         pooled_a = self.dropout(pooled_a)
-#         pooled_t = self.dropout(pooled_t)
-#         pooled_c = self.dropout(pooled_c)
+        pooled_a = self.model.pooler(out_a)
+        pooled_t = self.model.pooler(out_t)
+        pooled_c = self.model.pooler(out_c)
 
-#         embed_a = self.embedder_a(pooled_a)
-#         embed_t = self.embedder_t(pooled_t)
-#         embed_c = self.embedder_c(pooled_c)
+        pooled_a = self.model.dropout(pooled_a)
+        pooled_t = self.model.dropout(pooled_t)
+        pooled_c = self.model.dropout(pooled_c)
 
-#         # Fuse context
-#         embed_ac = torch.cat([embed_a, embed_c], dim=-1)
-#         embed_tc = torch.cat([embed_t, embed_c], dim=-1)
-#         embed_ac = self.mlp_ac(embed_ac)
-#         embed_tc = self.mlp_tc(embed_tc)
+        embed_a = self.embedder_a(pooled_a)
+        embed_t = self.embedder_t(pooled_t)
+        embed_c = self.embedder_c(pooled_c)
 
-#         if self.training:
-#             sim_inter = F.cosine_similarity(embed_a, embed_t, dim=-1)
-#             sim_inter = 0.5 * (sim_inter + 1) # Rescale to [0,1]
-#             # Compute similarity
-#             sim = F.cosine_similarity(embed_ac, embed_tc, dim=-1)
-#             sim = 0.5 * (sim + 1) # Rescale to [0,1]
-#             return sim, sim_inter
-#         else:
-#             # Compute similarity
-#             sim = F.cosine_similarity(embed_ac, embed_tc, dim=-1)
-#             sim = 0.5 * (sim + 1) # Rescale to [0,1]
-#             return sim
+        # Fuse context
+        embed_ac = torch.cat([embed_a, embed_c], dim=-1)
+        embed_tc = torch.cat([embed_t, embed_c], dim=-1)
+        embed_ac = self.mlp_ac(embed_ac)
+        embed_tc = self.mlp_tc(embed_tc)
+
+        # Compute similarity
+        sim = F.cosine_similarity(embed_ac, embed_tc, dim=-1)
+        sim = 0.5 * (sim + 1) # Rescale to [0,1]
+        return sim

@@ -36,12 +36,12 @@ def load_split_data_combined(data_path: str, title_path: str, num_fold: int = 0)
     data["input"] = data["title"] + "[SEP]" + data["anchor"] + "[SEP]" + data["target"]
 
     # Split data
-    if num_fold == 0:
+    if num_fold < 2:
         logger.info("Not create KFold")
     else:
         logger.info("Create {} Folds".format(num_fold))
-        data = create_folds(data, num_fold) 
-
+        data = create_folds(data, num_fold)
+    
     return data
 
 

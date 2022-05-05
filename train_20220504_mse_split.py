@@ -28,45 +28,34 @@ from uspp2pm.engine import train_one_epoch, predict
 #%%
 class config:
     device = torch.device("cuda:0")
-    dataset_name = "combined"
+    dataset_name = "split"
     # losses
-    loss_name = "pearson" # mse / shift_mse / pearson
+    loss_name = "pearson" # mse / shift_mse
     # models
-    pretrain_name = None # bert-for-patents / deberta-v3-large
+    pretrain_name = "deberta-v3-base"
     infer_name = "test"
+    embed_dim = 512
     # training
     lr = 2e-5
     wd = 0.01
-    num_fold = None # 0/1 for training all
-    epochs = None
-    bs = None
+    num_fold = 5
+    epochs = 10
+    bs = 32
     num_workers = 12
     lr_multi = 10
     sche_step = 5
     sche_decay = 0.5
     # log
-    tag = ""
+    tag = f"{dataset_name}-{loss_name}"
 
 parser = argparse.ArgumentParser("US patent model")
 parser.add_argument("--evaluate", action="store_true")
-parser.add_argument("--num_fold", type=int, default=5)
-parser.add_argument("--pretrain_name", type=str, default="deberta-v3-large")
-parser.add_argument("--bs", type=int, default=16)
-parser.add_argument("--epochs", type=int, default=10)
 
-opt = parser.parse_args()
+opt = parser.parse_args(args=[])
 opt.evaluate = False
 config.is_kaggle = is_kaggle
 config.is_training = not opt.evaluate
 config.is_evaluation = opt.evaluate
-def update_param(name, config, opt):
-    ori_value = getattr(config, name)
-    if ori_value is None:
-        setattr(config, name, getattr(opt, name))
-update_param("num_fold", config, opt)
-update_param("pretrain_name", config, opt)
-update_param("bs", config, opt)
-update_param("epochs", config, opt)
 
 #%%
 def update_config(config):
@@ -91,7 +80,6 @@ def update_config(config):
         else f"/kaggle/input/{config.infer_name}"
     )
     # log
-    config.tag = config.tag + f"PRE{config.pretrain_name}-DAT{config.dataset_name}-LOSS{config.loss_name}-FOLD{config.num_fold}"
     config.save_name = f"{datetime.datetime.now().strftime('%Y%m%d')}-{config.tag}"
     config.save_path = (
         f"./out/{config.save_name}/" if not config.is_kaggle

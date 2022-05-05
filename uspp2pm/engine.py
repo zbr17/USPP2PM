@@ -33,6 +33,8 @@ def preprocess_data(data, config):
         for k, v in data.items():
             if isinstance(v, torch.Tensor):
                 data[k] = v.to(config.device)
+            elif isinstance(v, Mapping):
+                data[k] = preprocess_data(v, config)
     else:
         data = data.to(config.device)
     return data
@@ -51,11 +53,11 @@ def train_one_epoch(
     labels_list = []
 
     for idx, data_info in enumerate(train_iter):
-        inputs = preprocess_data(data_info["inputs"], config)
-        labels = preprocess_data(data_info["labels"], config)
+        data_info = preprocess_data(data_info, config)
+        labels = data_info.pop("labels")
 
         # get similarity
-        sim = model(**inputs)
+        sim = model(data_info)
         loss = criterion(sim, labels)
 
         # update
@@ -84,15 +86,15 @@ def predict(
     labels_list = []
     with torch.no_grad():
         for data_info in val_iter:
-            inputs = preprocess_data(data_info["inputs"], config)
-            labels = preprocess_data(data_info["labels"], config)
+            data_info = preprocess_data(data_info, config)
             
             # get similarity
-            sim = model(**inputs)
+            sim = model(data_info)
             pred = sim
 
             pred_list.append(process_out(pred.cpu(), config))
             if not is_test:
+                labels = data_info.pop("labels")
                 labels_list.append(labels)
     if not is_test:
         return torch.cat(pred_list, dim=0).cpu().numpy(), torch.cat(labels_list, dim=0).cpu().numpy()
@@ -100,8 +102,8 @@ def predict(
         return torch.cat(pred_list, dim=0).cpu().numpy()
 
 def process_out(data, config):
-    if config.loss_name == "mse":
-        return data
-    elif config.loss_name == "shift_mse":
+    if config.loss_name == "shift_mse":
         data = torch.floor(data * 5) * 0.25
+        return data
+    else:
         return data

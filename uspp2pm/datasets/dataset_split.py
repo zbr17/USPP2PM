@@ -22,14 +22,13 @@ class PatentDatasetSplit(Dataset):
     
     def __getitem__(self, idx) -> dict:
         output_dict = {
-            "anchors": self.anchors[idx],
-            "targets": self.targets[idx],
-            "contexts": self.contexts[idx]
+            "anchors": self.tokenizer(self.anchors[idx]),
+            "targets": self.tokenizer(self.targets[idx]),
+            "contexts": self.tokenizer(self.contexts[idx])
         }
 
         if self.is_training:
             output_dict["labels"] = self.labels[idx]
-        raise NotImplementedError # FIXME
 
         return output_dict
 
@@ -40,7 +39,7 @@ def load_split_data_split(data_path: str, title_path: str, num_fold: int = 0) ->
     data = data.merge(title, left_on="context", right_on="code")
 
     # Split data
-    if num_fold == 0:
+    if num_fold < 2:
         logger.info("Not create KFold")
     else:
         logger.info("Create {} Folds".format(num_fold))
