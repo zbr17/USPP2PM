@@ -21,9 +21,8 @@ def config_logger(output_dir, dist_rank=0, name='LOG'):
                 colored('(%(filename)s %(lineno)d)', 'yellow') + ': %(levelname)s %(message)s'
 
     # create console handlers for master process
-    if dist_rank == 0:
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
+    if dist_rank == 0:            
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(logging.DEBUG)
         console_handler.setFormatter(

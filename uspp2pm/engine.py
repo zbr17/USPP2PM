@@ -1,19 +1,28 @@
 
 import torch.nn as nn
 import torch
+import torch.distributed as dist
 from typing import Mapping
 from torch.utils.data.dataloader import DataLoader
 from tqdm import tqdm
 from .utils import LogMeter
 
 def give_train_loader(collate_fn, train_set, config):
+    sampler = None
+    if dist.is_initialized() > 1:
+        sampler = torch.utils.data.DistributedSampler(
+            train_set, 
+            num_replicas=dist.get_world_size(), 
+            rank=dist.get_rank(), shuffle=True
+        )
     train_loader = DataLoader(
         dataset=train_set,
         batch_size=config.bs,
         shuffle=True,
         num_workers=config.num_workers,
         collate_fn=collate_fn,
-        drop_last=True
+        drop_last=True,
+        sampler=sampler
     )
     return train_loader
 
@@ -40,13 +49,15 @@ def preprocess_data(data, config):
     return data
 
 def train_one_epoch(
-    model, criterion, collate_fn, train_set, optimizer, scheduler, config
+    model, criterion, collate_fn, train_set, optimizer, scheduler, config, return_loss=False
 ):
     model.train()
     criterion.train()
     loss_meter = LogMeter()
     # get dataloader
     train_loader = give_train_loader(collate_fn, train_set, config)
+    if dist.is_initialized():
+        train_loader.sampler.set_epoch(config.epoch)
     train_iter = tqdm(train_loader)
 
     pred_list = []
@@ -72,7 +83,10 @@ def train_one_epoch(
         if idx % 10 == 0:
             train_iter.set_description(f"Loss={loss_meter.avg()}")
     scheduler.step()
-    return torch.cat(pred_list, dim=0).cpu().numpy(), torch.cat(labels_list, dim=0).cpu().numpy()
+    if return_loss:
+        return torch.cat(pred_list, dim=0).cpu().numpy(), torch.cat(labels_list, dim=0).cpu().numpy(), loss_meter.value_list
+    else:
+        return torch.cat(pred_list, dim=0).cpu().numpy(), torch.cat(labels_list, dim=0).cpu().numpy()
 
 def predict(
     model, collate_fn, val_set, config, is_test=False

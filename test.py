@@ -3,8 +3,8 @@ import os
 import sys
 import socket
 import datetime
+from matplotlib import backends
 
-import torch
 hostname = socket.gethostname()
 if hostname != "zebra":
     is_kaggle = True
@@ -12,10 +12,14 @@ if hostname != "zebra":
 else:
     is_kaggle = False
 
-#%%
 import pandas as pd
 import numpy as np
 import argparse
+import random
+import torch
+import torch.backends.cudnn as cudnn
+import torch.distributed as dist
+import torch.multiprocessing as mp
 
 from uspp2pm import logger
 from uspp2pm.utils import compute_metrics
@@ -26,38 +30,56 @@ from uspp2pm.losses import give_criterion
 from uspp2pm.engine import train_one_epoch, predict
 
 #%%
-class config:
-    device = torch.device("cuda:0")
+class CONFIG:
+    nproc_per_node = 1
+    is_distributed = nproc_per_node > 1
     dataset_name = "combined"
     # losses
-    loss_name = "pearson" # mse / shift_mse / pearson
+    loss_name = None # mse / shift_mse / pearson
     # models
-    pretrain_name = "deberta-v3-large" # bert-for-patents / deberta-v3-large
-    infer_name = "20220505-PREdeberta-v3-large-DATcombined-LOSSpearson-FOLD1"
+    pretrain_name = None # bert-for-patents / deberta-v3-large
+    infer_name = "test"
     # training
     lr = 2e-5
     wd = 0.01
-    num_fold = 1 # 0/1 for training all
-    epochs = 10
-    bs = 64
+    num_fold = None # 0/1 for training all
+    epochs = None
+    bs = None
     num_workers = 12
     lr_multi = 10
     sche_step = 5
     sche_decay = 0.5
     # log
-    tag = f"PRE{pretrain_name[:5]}-DAT{dataset_name[:5]}-LOSS{loss_name[:5]}-FOLD{num_fold[:5]}"
+    tag = ""
+    # general
+    seed = 42
+    dist_port = 12346
 
-parser = argparse.ArgumentParser("US patent model")
-parser.add_argument("--evaluate", action="store_true")
+def get_config():
+    parser = argparse.ArgumentParser("US patent model")
+    parser.add_argument("--evaluate", action="store_true")
+    parser.add_argument("--num_fold", type=int, default=5)
+    parser.add_argument("--pretrain_name", type=str, default="deberta-v3-large")
+    parser.add_argument("--loss_name", type=str, default="mse")
+    parser.add_argument("--bs", type=int, default=16)
+    parser.add_argument("--epochs", type=int, default=10)
 
-opt = parser.parse_args(args=[])
-opt.evaluate = True
-config.is_kaggle = is_kaggle
-config.is_training = not opt.evaluate
-config.is_evaluation = opt.evaluate
+    opt = parser.parse_args(args=[])
+    opt.evaluate = False
+    config = CONFIG()
+    config.is_kaggle = is_kaggle
+    config.is_training = not opt.evaluate
+    config.is_evaluation = opt.evaluate
+    def update_param(name, config, opt):
+        ori_value = getattr(config, name)
+        if ori_value is None:
+            setattr(config, name, getattr(opt, name))
+    update_param("num_fold", config, opt)
+    update_param("pretrain_name", config, opt)
+    update_param("bs", config, opt)
+    update_param("epochs", config, opt)
+    update_param("loss_name", config, opt)
 
-#%%
-def update_config(config):
     # dataset
     config.input_path = (
         "./data/uspp2pm" if not config.is_kaggle
@@ -79,13 +101,13 @@ def update_config(config):
         else f"/kaggle/input/{config.infer_name}"
     )
     # log
-    config.save_name = f"{datetime.datetime.now().strftime('%Y%m%d')}-{config.tag}"
+    config.tag = config.tag + f"{config.pretrain_name}_{config.dataset_name}_{config.loss_name}-N{config.num_fold}"
+    config.save_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M')}_{config.tag}"
     config.save_path = (
         f"./out/{config.save_name}/" if not config.is_kaggle
         else f"/kaggle/working/"
     )
     return config
-config = update_config(config)
 
 #%%
 def run_test(index, test_data, tokenizer, collate_fn, config):
@@ -104,7 +126,7 @@ def run_test(index, test_data, tokenizer, collate_fn, config):
 
     return preds
 
-#%%
+config = get_config()
 # initiate logger
 logger.config_logger(output_dir=config.save_path)
 
@@ -116,12 +138,13 @@ collate_fn = give_collate_fn(tokenizer, config)
 # training phase
 if config.is_evaluation:
     preds_all = []
-    for fold in range(config.num_fold):
-        if config.num_fold < 2:
-            preds = run_test("all", test_data, tokenizer, collate_fn, config)
-        else:
-            preds = run_test(fold, test_data, tokenizer, collate_fn, config)
+    if config.num_fold < 2:
+        preds = run_test("all", test_data, tokenizer, collate_fn, config)
         preds_all.append(preds)
+    else:
+        for fold in range(config.num_fold):  
+            preds = run_test(fold, test_data, tokenizer, collate_fn, config)
+            preds_all.append(preds)
     
     predictions = np.mean(preds_all, axis=0)
     submission = pd.DataFrame(data={
