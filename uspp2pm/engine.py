@@ -9,7 +9,7 @@ from .utils import LogMeter
 
 def give_train_loader(collate_fn, train_set, config):
     sampler = None
-    if dist.is_initialized() > 1:
+    if dist.is_initialized():
         sampler = torch.utils.data.DistributedSampler(
             train_set, 
             num_replicas=dist.get_world_size(), 
@@ -18,7 +18,7 @@ def give_train_loader(collate_fn, train_set, config):
     train_loader = DataLoader(
         dataset=train_set,
         batch_size=config.bs,
-        shuffle=True,
+        shuffle=sampler is None,
         num_workers=config.num_workers,
         collate_fn=collate_fn,
         drop_last=True,

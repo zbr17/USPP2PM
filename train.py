@@ -1,4 +1,5 @@
 #%%
+import logging
 import os
 import sys
 import socket
@@ -31,7 +32,7 @@ from uspp2pm.engine import train_one_epoch, predict
 
 #%%
 class CONFIG:
-    nproc_per_node = 1
+    nproc_per_node = 2
     is_distributed = nproc_per_node > 1
     dataset_name = "combined"
     # losses
@@ -45,7 +46,7 @@ class CONFIG:
     num_fold = None # 0/1 for training all
     epochs = None
     bs = None
-    num_workers = 12
+    num_workers = 8
     lr_multi = 10
     sche_step = 5
     sche_decay = 0.5
@@ -62,7 +63,7 @@ def get_config():
     parser.add_argument("--pretrain_name", type=str, default="deberta-v3-large")
     parser.add_argument("--loss_name", type=str, default="mse")
     parser.add_argument("--bs", type=int, default=16)
-    parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--epochs", type=int, default=20)
 
     opt = parser.parse_args()
     opt.evaluate = False
@@ -123,32 +124,15 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
     optimizer, scheduler = give_optim(model, config)
 
     best_val_acc, best_epoch = -1, 0
-    cur_acc, cur_epoch = 0, 0
+    cur_acc = 0
     for epoch in range(config.epochs):
         config.epoch = epoch
-        cur_epoch = epoch
         logger.info(f"Epoch: {epoch}")
         # Start to train
         logger.info("Start to train...")
         preds, labels = train_one_epoch(model, criterion, collate_fn, train_set, optimizer, scheduler, config)
         sub_acc = compute_metrics((preds, labels))["pearson"]
         logger.info(f"TrainSET - Fold: {index}, Epoch: {epoch}, Acc: {sub_acc}")
-
-        if config.rank == 0:
-            if cur_acc > best_val_acc:
-                best_val_acc = cur_acc
-                best_epoch = cur_epoch
-                model_params = (
-                    model.module.state_dict()
-                    if dist.is_initialized()
-                    else model.state_dict()
-                )
-                to_save_dict = {
-                    "model": model_params,
-                    "epoch": best_epoch
-                }
-                torch.save(to_save_dict, os.path.join(config.save_path, f"model_{index}.ckpt"))
-                logger.info(f"New best checkpoint: Epoch {best_epoch}")
 
         if is_val:
             # Validate
@@ -157,11 +141,30 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
             sub_acc = compute_metrics((preds, labels))["pearson"]
             cur_acc = sub_acc
             logger.info(f"ValSET - Fold: {index}, Epoch: {epoch}, Acc: {sub_acc}")
-            logger.info(f"ValBEST- Fold: {index}, Epoch: {best_epoch}, Acc: {best_val_acc}")
             # detect if collapse
             if sub_acc < 0.5:
                 logger.info("Training collapse!!!")
                 raise RuntimeError
+        
+        if config.rank == 0:
+            model_params = (
+                model.module.state_dict()
+                if dist.is_initialized()
+                else model.state_dict()
+            )
+            to_save_dict = {
+                "model": model_params,
+                "epoch": epoch
+            }
+            if is_val:
+                if cur_acc > best_val_acc:
+                    best_val_acc = cur_acc
+                    best_epoch = epoch
+                    torch.save(to_save_dict, os.path.join(config.save_path, f"model_{index}.ckpt"))
+                    logger.info(f"New best checkpoint: Epoch {best_epoch}")
+                logger.info(f"ValBEST- Fold: {index}, Epoch: {best_epoch}, Acc: {best_val_acc}")
+            else:
+                torch.save(to_save_dict, os.path.join(config.save_path, f"model_{index}.ckpt"))
     
     if is_val:
         return preds, labels
@@ -172,7 +175,7 @@ def main_worker(gpu, config):
     # initiate dist
     config.world_size = torch.cuda.device_count()
     config.rank = gpu
-    config.device = torch.device("cuda:0")
+    config.device = torch.device(f"cuda:{config.rank}")
     torch.cuda.set_device(config.rank)
     if config.is_distributed:
         dist.init_process_group(
@@ -181,7 +184,6 @@ def main_worker(gpu, config):
             world_size=config.world_size,
             rank=config.rank
         )
-        dist.barrier()
 
     # initiate seed
     np.random.seed(config.seed)
@@ -215,8 +217,9 @@ def main_worker(gpu, config):
                     try:
                         preds, labels = run(fold, sub_train_data, sub_val_data, tokenizer, collate_fn, True, config)
                         is_collapse = False
-                    except:
+                    except Exception as e:
                         is_collapse = True
+                        print(f"Except: {e}")
                 
                 preds_all.append(preds)
                 labels_all.append(labels)
