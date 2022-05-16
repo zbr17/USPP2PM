@@ -32,8 +32,8 @@ from uspp2pm.engine import train_one_epoch, predict
 
 #%%
 class CONFIG:
+    debug = False
     nproc_per_node = 2
-    is_distributed = nproc_per_node > 1
     dataset_name = "combined"
     # losses
     loss_name = None # mse / shift_mse / pearson
@@ -58,12 +58,15 @@ class CONFIG:
 
 def get_config():
     parser = argparse.ArgumentParser("US patent model")
+    parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--nproc_per_node", type=int, default=2)
     parser.add_argument("--evaluate", action="store_true")
     parser.add_argument("--num_fold", type=int, default=5)
+    parser.add_argument("--dataset_name", type=str, default="split")
     parser.add_argument("--pretrain_name", type=str, default="deberta-v3-large")
     parser.add_argument("--loss_name", type=str, default="mse")
-    parser.add_argument("--bs", type=int, default=16)
-    parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--bs", type=int, default=24)
+    parser.add_argument("--epochs", type=int, default=10)
 
     opt = parser.parse_args()
     opt.evaluate = False
@@ -73,9 +76,11 @@ def get_config():
     config.is_evaluation = opt.evaluate
     def update_param(name, config, opt):
         ori_value = getattr(config, name)
-        if ori_value is None:
-            setattr(config, name, getattr(opt, name))
+        setattr(config, name, getattr(opt, name))
+    update_param("debug", config, opt)
+    update_param("nproc_per_node", config, opt)
     update_param("num_fold", config, opt)
+    update_param("dataset_name", config, opt)
     update_param("pretrain_name", config, opt)
     update_param("bs", config, opt)
     update_param("epochs", config, opt)
@@ -102,12 +107,15 @@ def get_config():
         else f"/kaggle/input/{config.infer_name}"
     )
     # log
-    config.tag = config.tag + f"{config.pretrain_name}_{config.dataset_name}_{config.loss_name}-N{config.num_fold}"
-    config.save_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M')}_{config.tag}"
+    config.tag = config.tag + f"{config.pretrain_name}-{config.dataset_name}-{config.loss_name}-N{config.num_fold}"
+    config.save_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M')}-{config.tag}"
     config.save_path = (
         f"./out/{config.save_name}/" if not config.is_kaggle
         else f"/kaggle/working/"
     )
+    if config.debug:
+        config.save_path = f"./out/debug"
+    config.is_distributed = config.nproc_per_node > 1
     return config
 
 def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
