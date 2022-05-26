@@ -22,7 +22,7 @@ import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
-from uspp2pm import logger
+from uspp2pm import logger, tbwriter
 from uspp2pm.utils import compute_metrics
 from uspp2pm.datasets import give_rawdata, give_collate_fn, give_dataset
 from uspp2pm.models import give_tokenizer, give_model
@@ -47,7 +47,7 @@ class CONFIG:
     epochs = None
     bs = None
     num_workers = 8
-    lr_multi = 10
+    lr_multi = 1
     sche_step = 5
     sche_decay = 0.5
     # log
@@ -119,6 +119,7 @@ def get_config():
     return config
 
 def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
+    config.fold = index
     train_set = give_dataset(train_data, True, tokenizer, config)
     val_set = give_dataset(val_data, True, tokenizer, config) if is_val else None
 
@@ -141,6 +142,7 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
         preds, labels = train_one_epoch(model, criterion, collate_fn, train_set, optimizer, scheduler, config)
         sub_acc = compute_metrics((preds, labels))["pearson"]
         logger.info(f"TrainSET - Fold: {index}, Epoch: {epoch}, Acc: {sub_acc}")
+        tbwriter.add_scalar(f"fold{index}/train/acc", sub_acc)
 
         if is_val:
             # Validate
@@ -149,6 +151,7 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
             sub_acc = compute_metrics((preds, labels))["pearson"]
             cur_acc = sub_acc
             logger.info(f"ValSET - Fold: {index}, Epoch: {epoch}, Acc: {sub_acc}")
+            tbwriter.add_scalar(f"fold{index}/val/acc", sub_acc)
             # detect if collapse
             if sub_acc < 0.5:
                 logger.info("Training collapse!!!")
@@ -201,8 +204,12 @@ def main_worker(gpu, config):
     torch.cuda.manual_seed(config.seed)
     cudnn.deterministic = True
 
-    # initiate logger
+    # initiate recorder
     logger.config_logger(output_dir=config.save_path, dist_rank=config.rank)
+    tbwriter.config(output_dir=config.save_path, dist_rank=config.rank)
+    for item in dir(config):
+        if not item.startswith("__") and not item.endswith("__"):
+            logger.info(f"{item}: {getattr(config, item)}")
 
     # get dataset
     train_data, test_data = give_rawdata("train", config), give_rawdata("test", config)
@@ -234,8 +241,10 @@ def main_worker(gpu, config):
             
             preds_all = np.concatenate(preds_all, axis=0)
             labels_all = np.concatenate(labels_all, axis=0)
-            final_acc = compute_metrics((preds_all, labels_all))
+            final_acc = compute_metrics((preds_all, labels_all))["pearson"]
             logger.info(f"Final acc: {final_acc}")
+            tbwriter.add_scalar(f"final/train/acc", final_acc)
+
 
 def main():
     config = get_config()

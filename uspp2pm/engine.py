@@ -1,10 +1,12 @@
+from typing import Mapping
+from tqdm import tqdm
 
 import torch.nn as nn
 import torch
 import torch.distributed as dist
-from typing import Mapping
 from torch.utils.data.dataloader import DataLoader
-from tqdm import tqdm
+
+from uspp2pm import tbwriter
 from .utils import LogMeter
 
 def give_train_loader(collate_fn, train_set, config):
@@ -82,6 +84,7 @@ def train_one_epoch(
 
         if idx % 10 == 0:
             train_iter.set_description(f"Loss={loss_meter.avg()}")
+            tbwriter.add_scalar(f"fold{config.fold}/train/loss", loss)
     scheduler.step()
     if return_loss:
         return torch.cat(pred_list, dim=0).cpu().numpy(), torch.cat(labels_list, dim=0).cpu().numpy(), loss_meter.value_list
