@@ -30,22 +30,25 @@ from uspp2pm.optimizers import give_optim
 from uspp2pm.losses import give_criterion
 from uspp2pm.engine import train_one_epoch, predict
 
+_COLLAPSE_REPEAT = 5
+_CUR_REPEAT = 0
+
 #%%
 class CONFIG:
     debug = False
-    nproc_per_node = 2
-    dataset_name = "combined"
+    nproc_per_node = ...
+    dataset_name = ... # split / combined
     # losses
-    loss_name = None # mse / shift_mse / pearson
+    loss_name = ... # mse / shift_mse / pearson
     # models
-    pretrain_name = None # bert-for-patents / deberta-v3-large
+    pretrain_name = ... # bert-for-patents / deberta-v3-large
     infer_name = "test"
     # training
-    lr = 2e-5
-    wd = 0.01
-    num_fold = None # 0/1 for training all
-    epochs = None
-    bs = None
+    lr = ...
+    wd = ...
+    num_fold = ... # 0/1 for training all
+    epochs = ...
+    bs = ...
     num_workers = 8
     lr_multi = 1
     sche_step = 5
@@ -67,6 +70,8 @@ def get_config():
     parser.add_argument("--loss_name", type=str, default="mse")
     parser.add_argument("--bs", type=int, default=24)
     parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--lr", type=float, default=2e-5)
+    parser.add_argument("--wd", type=float, default=0.01)
 
     opt = parser.parse_args()
     opt.evaluate = False
@@ -74,8 +79,11 @@ def get_config():
     config.is_kaggle = is_kaggle
     config.is_training = not opt.evaluate
     config.is_evaluation = opt.evaluate
+
+    hparam_dict = {}
     def update_param(name, config, opt):
         ori_value = getattr(config, name)
+        hparam_dict[name] = getattr(opt, name)
         setattr(config, name, getattr(opt, name))
     update_param("debug", config, opt)
     update_param("nproc_per_node", config, opt)
@@ -85,6 +93,8 @@ def get_config():
     update_param("bs", config, opt)
     update_param("epochs", config, opt)
     update_param("loss_name", config, opt)
+    update_param("lr", config, opt)
+    update_param("wd", config, opt)
 
     # dataset
     config.input_path = (
@@ -107,7 +117,8 @@ def get_config():
         else f"/kaggle/input/{config.infer_name}"
     )
     # log
-    config.tag = config.tag + f"{config.pretrain_name}-{config.dataset_name}-{config.loss_name}-N{config.num_fold}"
+    name = "-".join([k[0].upper() + str(v) for k, v in hparam_dict.items()])
+    config.tag = config.tag + "-" + name
     config.save_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M')}-{config.tag}"
     config.save_path = (
         f"./out/{config.save_name}/" if not config.is_kaggle
@@ -116,7 +127,7 @@ def get_config():
     if config.debug:
         config.save_path = f"./out/debug"
     config.is_distributed = config.nproc_per_node > 1
-    return config
+    return config, hparam_dict
 
 def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
     config.fold = index
@@ -182,7 +193,7 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
     else:
         return None, None
 
-def main_worker(gpu, config):
+def main_worker(gpu, config, hparam_dict):
     # initiate dist
     config.world_size = torch.cuda.device_count()
     config.rank = gpu
@@ -229,12 +240,21 @@ def main_worker(gpu, config):
 
                 is_collapse = True
                 while(is_collapse):
+                    global _CUR_REPEAT
                     try:
                         preds, labels = run(fold, sub_train_data, sub_val_data, tokenizer, collate_fn, True, config)
                         is_collapse = False
+                        _CUR_REPEAT = 0
                     except Exception as e:
                         is_collapse = True
+                        _CUR_REPEAT += 1
                         print(f"Except: {e}")
+                        if _CUR_REPEAT > _COLLAPSE_REPEAT:
+                            tbwriter.add_hparams(
+                                hparam_dict=hparam_dict,
+                                metric_dict={"hparam/train_acc": -1}
+                            )
+                            exit(1)
                 
                 preds_all.append(preds)
                 labels_all.append(labels)
@@ -244,14 +264,18 @@ def main_worker(gpu, config):
             final_acc = compute_metrics((preds_all, labels_all))["pearson"]
             logger.info(f"Final acc: {final_acc}")
             tbwriter.add_scalar(f"final/train/acc", final_acc)
+            tbwriter.add_hparams(
+                hparam_dict=hparam_dict,
+                metric_dict={"hparam/train_acc": final_acc}
+            )
 
 
 def main():
-    config = get_config()
+    config, hparam_dict = get_config()
     if config.nproc_per_node > 1:
         mp.spawn(main_worker, nprocs=config.nproc_per_node, args=(config,))
     else:
-        main_worker(0, config)
+        main_worker(0, config, hparam_dict)
 
 if __name__ == "__main__":
     main()

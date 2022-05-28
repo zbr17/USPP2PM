@@ -45,3 +45,10 @@ def count_step(tag: str) -> int:
 def add_scalar(tag: str, value: Union[Tensor, float, int]):
     curr_step = count_step(tag)
     log.add_scalar(tag, value, global_step=curr_step)
+
+def add_hparams(hparam_dict, metric_dict, run_name=None):
+    log.add_hparams(
+        hparam_dict=hparam_dict,
+        metric_dict=metric_dict,
+        run_name=run_name
+    )
