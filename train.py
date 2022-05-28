@@ -35,66 +35,60 @@ _CUR_REPEAT = 0
 
 #%%
 class CONFIG:
-    debug = False
-    nproc_per_node = ...
-    dataset_name = ... # split / combined
-    # losses
-    loss_name = ... # mse / shift_mse / pearson
-    # models
-    pretrain_name = ... # bert-for-patents / deberta-v3-large
+    # dataset
+    # loss
+    # model
     infer_name = "test"
-    # training
-    lr = ...
-    wd = ...
-    num_fold = ... # 0/1 for training all
-    epochs = ...
-    bs = ...
-    num_workers = 8
+    # optimizer
     lr_multi = 1
+    # scheduler
     sche_step = 5
     sche_decay = 0.5
-    # log
-    tag = ""
+    # training 
+    num_workers = 8
     # general
     seed = 42
     dist_port = 12346
 
 def get_config():
     parser = argparse.ArgumentParser("US patent model")
-    parser.add_argument("--debug", action="store_true")
-    parser.add_argument("--nproc_per_node", type=int, default=2)
-    parser.add_argument("--evaluate", action="store_true")
-    parser.add_argument("--num_fold", type=int, default=5)
-    parser.add_argument("--dataset_name", type=str, default="split")
-    parser.add_argument("--pretrain_name", type=str, default="deberta-v3-large")
-    parser.add_argument("--loss_name", type=str, default="mse")
-    parser.add_argument("--bs", type=int, default=24)
-    parser.add_argument("--epochs", type=int, default=10)
+    # dataset
+    parser.add_argument("--dataset_name", type=str, default="split", 
+                                            help="split / combined")
+    # loss
+    parser.add_argument("--loss_name", type=str, default="mse", 
+                                            help="mse / shift_mse / pearson")
+    # model
+    parser.add_argument("--pretrain_name", type=str, default="deberta-v3-large", 
+                                            help="bert-for-patents / deberta-v3-large")
+    # optimizer
     parser.add_argument("--lr", type=float, default=2e-5)
     parser.add_argument("--wd", type=float, default=0.01)
+    # scheduler
+    # training
+    parser.add_argument("--num_fold", type=int, default=5, 
+                                            help="0/1 for training all")
+    parser.add_argument("--bs", type=int, default=24)
+    parser.add_argument("--epochs", type=int, default=10)
+    # general
+    parser.add_argument("--tag", type=str, default="")
+    parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--nproc_per_node", type=int, default=2)
 
     opt = parser.parse_args()
-    opt.evaluate = False
     config = CONFIG()
     config.is_kaggle = is_kaggle
-    config.is_training = not opt.evaluate
-    config.is_evaluation = opt.evaluate
+    config.is_training = True
+    config.is_evaluation = False
 
     hparam_dict = {}
     def update_param(name, config, opt):
         ori_value = getattr(config, name)
         hparam_dict[name] = getattr(opt, name)
         setattr(config, name, getattr(opt, name))
-    update_param("debug", config, opt)
-    update_param("nproc_per_node", config, opt)
-    update_param("num_fold", config, opt)
-    update_param("dataset_name", config, opt)
-    update_param("pretrain_name", config, opt)
-    update_param("bs", config, opt)
-    update_param("epochs", config, opt)
-    update_param("loss_name", config, opt)
-    update_param("lr", config, opt)
-    update_param("wd", config, opt)
+    for k in dir(opt):
+        if not k.startswith("_") and not k.endswith("_"):
+            update_param(k, config, opt)
 
     # dataset
     config.input_path = (

@@ -16,13 +16,13 @@ def get_config(file_path: str) -> Tuple[str, List[str], List[str]]:
     return tmux_name, env_cmd, cmd_list
 
 def allocate(cmd_list: List[str], card_per_exp: int, device: list) -> dict:
-    if device == 0:
+    if device == -1:
         device = list(range(torch.cuda.device_count()))
     num_split = math.floor(len(device) / card_per_exp)
     card_env = {}
     for idx in range(num_split):
         sub_env = list(range(idx*card_per_exp, (idx+1)*card_per_exp))
-        sub_env = [str(int(item)) for item in sub_env]
+        sub_env = [str(device[int(item)]) for item in sub_env]
         sub_env = ','.join(sub_env)
         card_env[idx] = f'CUDA_VISIBLE_DEVICES={sub_env}'
 
@@ -75,9 +75,9 @@ def clear_tmux(session_name: str):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Run code via tmux')
     parser.add_argument('--delete', action='store_true', default=False)
-    parser.add_argument('--path', type=str, default='./tmp.yaml')
+    parser.add_argument('--path', type=str, default='./start.yaml')
     parser.add_argument('--card-per-exp', type=int, default=1)
-    parser.add_argument('--device', type=int, nargs='+', default=0)
+    parser.add_argument('--device', type=int, nargs='+', default=-1)
     opt = parser.parse_args()
     
     tmux_name, env_cmd, cmd_list = get_config(opt.path)
