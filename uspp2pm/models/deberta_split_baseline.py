@@ -1,10 +1,11 @@
-from typing import Optional
-from matplotlib.pyplot import isinteractive
+from typing import Tuple, Optional
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.init as init
-import torch.nn.functional as F
-import math
+from torch import Tensor
+
 from transformers.models.deberta_v2 import DebertaV2ForSequenceClassification
 
 class Mlp(nn.Module):
@@ -32,6 +33,7 @@ class DeBertaSplitBaseline(nn.Module):
     """
     def __init__(
         self, 
+        criterion,
         config
     ):
         super().__init__()
@@ -39,6 +41,7 @@ class DeBertaSplitBaseline(nn.Module):
         cache_dir = config.model_path
         num_layer = config.num_layer
         # initialize
+        self.criterion = criterion
         self.model = DebertaV2ForSequenceClassification.from_pretrained(
             pretrained_model_name_or_path=cache_dir,
             num_labels=1
@@ -71,7 +74,8 @@ class DeBertaSplitBaseline(nn.Module):
     def forward(
         self,
         data_info: dict,
-    ) -> torch.Tensor:
+        labels: Optional[Tensor] = None
+    ) -> Tuple[Tensor, Tensor]:
         input_a = data_info["anchors"]
         input_t = data_info["targets"]
         input_c = data_info["contexts"]
@@ -92,5 +96,11 @@ class DeBertaSplitBaseline(nn.Module):
         # Fuse context
         feat_fuse = torch.cat([pooled_a, pooled_t, pooled_c], dim=-1)
         logits = self.classifier(feat_fuse)
-        logits = torch.sigmoid(logits)
-        return logits.squeeze()
+        logits = torch.sigmoid(logits).squeeze()
+
+        if self.training:
+            # compute losses
+            loss = self.criterion(logits, labels)
+            return logits, loss
+        else:
+            return logits

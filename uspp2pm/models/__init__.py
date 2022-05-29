@@ -6,6 +6,8 @@ from .deberta_split_similarity import DeBertaSplitSimilarity
 from .deberta_tokenizer import give_deberta_tokenizer
 # from .bert_tokenizer import give_bert_tokenizer
 
+from .losses import give_criterion
+
 _model_dict = {
     "combined_baseline": {
         "deberta-v3-large": DeBertaCombinedBaseline,
@@ -37,7 +39,9 @@ def give_model(config):
     model_name = config.model_name
     pretrain_name = config.pretrain_name
     assert dataset_name in model_name
+    # get criterion
+    criterion = give_criterion(config)
     # initialize
     _meta_model = _model_dict[model_name][pretrain_name]
-    model = _meta_model(config)
+    model = _meta_model(criterion, config)
     return model

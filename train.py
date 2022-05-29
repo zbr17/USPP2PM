@@ -1,4 +1,5 @@
 #%%
+from copy import deepcopy
 import logging
 import os
 import sys
@@ -27,7 +28,6 @@ from uspp2pm.utils import compute_metrics
 from uspp2pm.datasets import give_rawdata, give_collate_fn, give_dataset
 from uspp2pm.models import give_tokenizer, give_model
 from uspp2pm.optimizers import give_optim
-from uspp2pm.losses import give_criterion
 from uspp2pm.engine import train_one_epoch, predict
 
 _COLLAPSE_REPEAT = 5
@@ -85,11 +85,10 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
     train_set = give_dataset(train_data, True, tokenizer, config)
     val_set = give_dataset(val_data, True, tokenizer, config) if is_val else None
 
-    # get model and criterion
+    # get model
     model = give_model(config).to(config.device)
     if dist.is_initialized():
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[config.rank])
-    criterion = give_criterion(config).to(config.device)
 
     # get optimizer and scheduler
     optimizer, scheduler = give_optim(model, config)
@@ -101,7 +100,7 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
         logger.info(f"Epoch: {epoch}")
         # Start to train
         logger.info("Start to train...")
-        preds, labels = train_one_epoch(model, criterion, collate_fn, train_set, optimizer, scheduler, config)
+        preds, labels = train_one_epoch(model, collate_fn, train_set, optimizer, scheduler, config)
         sub_acc = compute_metrics((preds, labels))["pearson"]
         logger.info(f"TrainSET - Fold: {index}, Epoch: {epoch}, Acc: {sub_acc}")
         tbwriter.add_scalar(f"fold{index}/train/acc", sub_acc)
@@ -172,6 +171,13 @@ def main_worker(gpu, config, hparam_dict):
     for item in dir(config):
         if not item.startswith("__") and not item.endswith("__"):
             logger.info(f"{item}: {getattr(config, item)}")
+    
+    tbwriter.add_hparams(
+        hparam_dict=hparam_dict,
+        metric_dict={"hparam/train_acc": 0},
+        run_name=config.save_name,
+        progress=-1
+    )
 
     # get dataset
     train_data, test_data = give_rawdata("train", config), give_rawdata("test", config)
@@ -199,7 +205,9 @@ def main_worker(gpu, config, hparam_dict):
                         if _CUR_REPEAT > _COLLAPSE_REPEAT:
                             tbwriter.add_hparams(
                                 hparam_dict=hparam_dict,
-                                metric_dict={"hparam/train_acc": -1}
+                                metric_dict={"hparam/train_acc": -1},
+                                run_name=config.save_name,
+                                progress=-2
                             )
                             exit(1)
                     else:
@@ -208,6 +216,13 @@ def main_worker(gpu, config, hparam_dict):
                 
                 preds_all.append(preds)
                 labels_all.append(labels)
+
+                tbwriter.add_hparams(
+                    hparam_dict=hparam_dict,
+                    metric_dict={"hparam/train_acc": 0},
+                    run_name=config.save_name,
+                    progress=float(fold) / float(config.num_fold)
+                )
             
             preds_all = np.concatenate(preds_all, axis=0)
             labels_all = np.concatenate(labels_all, axis=0)
@@ -216,7 +231,9 @@ def main_worker(gpu, config, hparam_dict):
             tbwriter.add_scalar(f"final/train/acc", final_acc)
             tbwriter.add_hparams(
                 hparam_dict=hparam_dict,
-                metric_dict={"hparam/train_acc": final_acc}
+                metric_dict={"hparam/train_acc": final_acc},
+                run_name=config.save_name,
+                progress=1,
             )
 
 

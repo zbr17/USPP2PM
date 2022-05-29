@@ -51,10 +51,9 @@ def preprocess_data(data, config):
     return data
 
 def train_one_epoch(
-    model, criterion, collate_fn, train_set, optimizer, scheduler, config, return_loss=False
+    model, collate_fn, train_set, optimizer, scheduler, config, return_loss=False
 ):
     model.train()
-    criterion.train()
     loss_meter = LogMeter()
     # get dataloader
     train_loader = give_train_loader(collate_fn, train_set, config)
@@ -70,8 +69,7 @@ def train_one_epoch(
         labels = data_info.pop("labels")
 
         # get similarity
-        sim = model(data_info)
-        loss = criterion(sim, labels)
+        sim, loss = model(data_info, labels)
 
         # update
         optimizer.zero_grad()

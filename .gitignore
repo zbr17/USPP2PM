@@ -1,8 +1,10 @@
 __pycache__/
 out/
+out_archive/
 wandb/
 pretrains/
 .vscode/
 kaggle/
 results/
+leaderboard/
 debug_*.py

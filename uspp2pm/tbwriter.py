@@ -4,6 +4,7 @@ import sys
 import os
 from collections import defaultdict
 from typing import Union
+from copy import deepcopy
 
 import torch
 from torch import Tensor
@@ -46,9 +47,11 @@ def add_scalar(tag: str, value: Union[Tensor, float, int]):
     curr_step = count_step(tag)
     log.add_scalar(tag, value, global_step=curr_step)
 
-def add_hparams(hparam_dict, metric_dict, run_name=None):
+def add_hparams(hparam_dict, metric_dict, run_name=None, progress: float = 1.):
+    hp_state = deepcopy(hparam_dict)
+    hp_state["progress"] = progress
     log.add_hparams(
-        hparam_dict=hparam_dict,
+        hparam_dict=hp_state,
         metric_dict=metric_dict,
         run_name=run_name
     )
