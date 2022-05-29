@@ -1,25 +1,29 @@
-from .deberta_pp2p import DeBertaPP2PCombined, DeBertaPP2PSplit
-from .bert_patents import BertPatentCombined
+from .deberta_combined_baseline import DeBertaCombinedBaseline
+from .deberta_split_baseline import DeBertaSplitBaseline
+from .deberta_split_similarity import DeBertaSplitSimilarity
+# from .bert_patents import BertPatentCombined
 
 from .deberta_tokenizer import give_deberta_tokenizer
-from .bert_tokenizer import give_bert_tokenizer
+# from .bert_tokenizer import give_bert_tokenizer
 
 _model_dict = {
-    "combined": {
-        "deberta-v3-large": DeBertaPP2PCombined,
-        "deberta-v3-base": DeBertaPP2PCombined,
-        "bert-for-patents": BertPatentCombined
+    "combined_baseline": {
+        "deberta-v3-large": DeBertaCombinedBaseline,
+        "deberta-v3-base": DeBertaCombinedBaseline,
     },
-    "split": {
-        "deberta-v3-large": DeBertaPP2PSplit,
-        "deberta-v3-base": DeBertaPP2PSplit,
+    "split_baseline": {
+        "deberta-v3-large": DeBertaSplitBaseline,
+        "deberta-v3-base": DeBertaSplitBaseline,
+    },
+    "split_similarity": {
+        "deberta-v3-large": DeBertaSplitSimilarity,
+        "deberta-v3-base": DeBertaSplitSimilarity,
     }
 }
 
 _tokenizer_dict = {
     "deberta-v3-large": give_deberta_tokenizer,
     "deberta-v3-base": give_deberta_tokenizer,
-    "bert-for-patents": give_bert_tokenizer
 }
 
 def give_tokenizer(config):
@@ -30,8 +34,10 @@ def give_tokenizer(config):
 def give_model(config):
     # get args
     dataset_name = config.dataset_name
+    model_name = config.model_name
     pretrain_name = config.pretrain_name
+    assert dataset_name in model_name
     # initialize
-    _meta_model = _model_dict[dataset_name][pretrain_name]
+    _meta_model = _model_dict[model_name][pretrain_name]
     model = _meta_model(config)
     return model

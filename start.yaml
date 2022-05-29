@@ -23,3 +23,10 @@ cmd:
   # 2022-05-28
   # - python train.py --num_fold 5 --dataset_name split --pretrain_name deberta-v3-base --loss_name mse --bs 48 --epochs 10 --lr 0.00002 --wd 0.01 --nproc_per_node 1
   # - python train.py --num_fold 5 --dataset_name combined --pretrain_name deberta-v3-base --loss_name pearson --bs 48 --epochs 10 --lr 0.00002 --wd 0.01 --nproc_per_node 1
+  # 2022-05-29
+  # - python train.py --num_fold 5 --dataset_name split --pretrain_name deberta-v3-base --loss_name mse --bs 48 --epochs 10 --lr 0.00002 --wd 0.01 --nproc_per_node 1 --lr_multi 1
+  # - python train.py --num_fold 5 --dataset_name split --pretrain_name deberta-v3-base --loss_name mse --bs 48 --epochs 10 --lr 0.00002 --wd 0.01 --nproc_per_node 1 --lr_multi 10 --model_name split_baseline
+  # - python train.py --num_fold 5 --dataset_name split --pretrain_name deberta-v3-base --loss_name mse --bs 48 --epochs 10 --lr 0.00002 --wd 0.01 --nproc_per_node 1 --lr_multi 100 --model_name split_baseline
+  # - python train.py --num_fold 5 --dataset_name split --pretrain_name deberta-v3-base --loss_name mse --bs 48 --epochs 10 --lr 0.00002 --wd 0.01 --nproc_per_node 1 --lr_multi 10 --num_layer 2 --model_name split_baseline
+  # - python train.py --num_fold 5 --dataset_name split --pretrain_name deberta-v3-base --loss_name mse --bs 48 --epochs 10 --lr 0.00002 --wd 0.01 --nproc_per_node 1 --lr_multi 10 --num_layer 3 --model_name split_baseline
+  - python train.py --num_fold 5 --dataset_name split --pretrain_name deberta-v3-base --loss_name mse --bs 48 --epochs 10 --lr 0.00002 --wd 0.01 --nproc_per_node 1 --lr_multi 10 --num_layer 1 --model_name split_similarity

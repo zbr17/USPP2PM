@@ -7,44 +7,6 @@ import torch.nn.functional as F
 import math
 from transformers.models.deberta_v2 import DebertaV2ForSequenceClassification
 
-class DeBertaPP2PCombined(nn.Module):
-    """
-    Without dropout in the final layer.
-    """
-    def __init__(
-        self, 
-        config
-    ):
-        super().__init__()
-        # get args
-        cache_dir = config.model_path
-        # initialize
-        self.model = DebertaV2ForSequenceClassification.from_pretrained(
-            pretrained_model_name_or_path=cache_dir,
-            num_labels=1
-        )
-    
-    def forward(
-        self,
-        data_info: dict,
-    ) -> torch.Tensor:
-        input_ids = data_info["inputs"]["input_ids"]
-        attention_mask = data_info["inputs"]["attention_mask"]
-        token_type_ids = data_info["inputs"]["token_type_ids"]
-
-        outputs = self.model.deberta(
-            input_ids,
-            token_type_ids=token_type_ids,
-            attention_mask=attention_mask
-        )
-
-        encoder_layer = outputs[0]
-        pooled_output = self.model.pooler(encoder_layer)
-        pooled_output = self.model.dropout(pooled_output)
-        logits = self.model.classifier(pooled_output)
-        logits = torch.sigmoid(logits)
-        return logits.squeeze()
-
 class Mlp(nn.Module):
     def __init__(self, size_list=[7,64,2]):
         super().__init__()
@@ -64,9 +26,9 @@ class Mlp(nn.Module):
             x = module(x)
         return x
 
-class DeBertaPP2PSplit(nn.Module):
+class DeBertaSplitSimilarity(nn.Module):
     """
-    Without dropout in the final layer.
+    Split with similarity modules
     """
     def __init__(
         self, 
@@ -75,6 +37,7 @@ class DeBertaPP2PSplit(nn.Module):
         super().__init__()
         # get args
         cache_dir = config.model_path
+        num_layer = config.num_layer
         # initialize
         self.model = DebertaV2ForSequenceClassification.from_pretrained(
             pretrained_model_name_or_path=cache_dir,
@@ -82,11 +45,19 @@ class DeBertaPP2PSplit(nn.Module):
         )
         self.output_dim = self.model.pooler.output_dim
         self.model.classifier = nn.Identity()
-        self.classifier = nn.Linear(3 * self.output_dim, 1)
+        
+        hidden_dim = 2 * self.output_dim
+        if num_layer == 1:
+            self.ac_embedder = nn.Linear(hidden_dim, self.output_dim)
+            self.tc_embedder = nn.Linear(hidden_dim, self.output_dim)
+        else:
+            size_list = [hidden_dim] * num_layer + [self.output_dim]
+            self.ac_embedder = Mlp(size_list=size_list)
+            self.tc_embedder = Mlp(size_list=size_list)
 
         self.base_model_list = [self.model]
         self.new_model_list = [
-            self.classifier
+            self.ac_embedder, self.tc_embedder
         ]
         self.init_weights()
     
@@ -96,7 +67,7 @@ class DeBertaPP2PSplit(nn.Module):
                 if isinstance(sub_module, nn.Linear):
                     init.kaiming_normal_(sub_module.weight, a=math.sqrt(5))
                     init.zeros_(sub_module.bias)
-        to_init_list = [self.classifier]
+        to_init_list = self.new_model_list
         for module in to_init_list:
             _init_weights(module)
     
@@ -122,7 +93,11 @@ class DeBertaPP2PSplit(nn.Module):
         pooled_c = self.model.dropout(pooled_c)
 
         # Fuse context
-        feat_fuse = torch.cat([pooled_a, pooled_t, pooled_c], dim=-1)
-        logits = self.classifier(feat_fuse)
-        logits = torch.sigmoid(logits)
+        ac_emb = torch.cat([pooled_a, pooled_c], dim=-1)
+        tc_emb = torch.cat([pooled_t, pooled_c], dim=-1)
+        ac_emb = self.ac_embedder(ac_emb)
+        tc_emb = self.tc_embedder(tc_emb)
+
+        logits = F.cosine_similarity(ac_emb, tc_emb, dim=-1)
+        logits = (logits + 1) * 0.5
         return logits.squeeze()

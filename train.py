@@ -33,49 +33,7 @@ from uspp2pm.engine import train_one_epoch, predict
 _COLLAPSE_REPEAT = 5
 _CUR_REPEAT = 0
 
-#%%
-class CONFIG:
-    # dataset
-    # loss
-    # model
-    infer_name = "test"
-    # optimizer
-    lr_multi = 1
-    # scheduler
-    sche_step = 5
-    sche_decay = 0.5
-    # training 
-    num_workers = 8
-    # general
-    seed = 42
-    dist_port = 12346
-
-def get_config():
-    parser = argparse.ArgumentParser("US patent model")
-    # dataset
-    parser.add_argument("--dataset_name", type=str, default="split", 
-                                            help="split / combined")
-    # loss
-    parser.add_argument("--loss_name", type=str, default="mse", 
-                                            help="mse / shift_mse / pearson")
-    # model
-    parser.add_argument("--pretrain_name", type=str, default="deberta-v3-large", 
-                                            help="bert-for-patents / deberta-v3-large")
-    # optimizer
-    parser.add_argument("--lr", type=float, default=2e-5)
-    parser.add_argument("--wd", type=float, default=0.01)
-    # scheduler
-    # training
-    parser.add_argument("--num_fold", type=int, default=5, 
-                                            help="0/1 for training all")
-    parser.add_argument("--bs", type=int, default=24)
-    parser.add_argument("--epochs", type=int, default=10)
-    # general
-    parser.add_argument("--tag", type=str, default="")
-    parser.add_argument("--debug", action="store_true")
-    parser.add_argument("--nproc_per_node", type=int, default=2)
-
-    opt = parser.parse_args()
+def get_config(opt):
     config = CONFIG()
     config.is_kaggle = is_kaggle
     config.is_training = True
@@ -83,7 +41,6 @@ def get_config():
 
     hparam_dict = {}
     def update_param(name, config, opt):
-        ori_value = getattr(config, name)
         hparam_dict[name] = getattr(opt, name)
         setattr(config, name, getattr(opt, name))
     for k in dir(opt):
@@ -111,7 +68,7 @@ def get_config():
         else f"/kaggle/input/{config.infer_name}"
     )
     # log
-    name = "-".join([k[0].upper() + str(v) for k, v in hparam_dict.items()])
+    name = "-".join([k[:5].upper() + str(v) for k, v in hparam_dict.items()])
     config.tag = config.tag + "-" + name
     config.save_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M')}-{config.tag}"
     config.save_path = (
@@ -160,7 +117,7 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
             # detect if collapse
             if sub_acc < 0.5:
                 logger.info("Training collapse!!!")
-                raise RuntimeError
+                return -1, -1
         
         if config.rank == 0:
             model_params = (
@@ -235,20 +192,19 @@ def main_worker(gpu, config, hparam_dict):
                 is_collapse = True
                 while(is_collapse):
                     global _CUR_REPEAT
-                    try:
-                        preds, labels = run(fold, sub_train_data, sub_val_data, tokenizer, collate_fn, True, config)
-                        is_collapse = False
-                        _CUR_REPEAT = 0
-                    except Exception as e:
+                    preds, labels = run(fold, sub_train_data, sub_val_data, tokenizer, collate_fn, True, config)
+                    if isinstance(preds, int) and preds == -1:
                         is_collapse = True
                         _CUR_REPEAT += 1
-                        print(f"Except: {e}")
                         if _CUR_REPEAT > _COLLAPSE_REPEAT:
                             tbwriter.add_hparams(
                                 hparam_dict=hparam_dict,
                                 metric_dict={"hparam/train_acc": -1}
                             )
                             exit(1)
+                    else:
+                        is_collapse = False
+                        _CUR_REPEAT = 0
                 
                 preds_all.append(preds)
                 labels_all.append(labels)
@@ -264,12 +220,57 @@ def main_worker(gpu, config, hparam_dict):
             )
 
 
-def main():
-    config, hparam_dict = get_config()
+def main(opt):
+    config, hparam_dict = get_config(opt)
     if config.nproc_per_node > 1:
         mp.spawn(main_worker, nprocs=config.nproc_per_node, args=(config,))
     else:
         main_worker(0, config, hparam_dict)
 
+class CONFIG:
+    # dataset
+    # loss
+    # model
+    infer_name = "test"
+    # optimizer
+    # scheduler
+    sche_step = 5
+    sche_decay = 0.5
+    # training 
+    num_workers = 8
+    # general
+    seed = 42
+    dist_port = 12346
+
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser("US patent model")
+    # dataset
+    parser.add_argument("--dataset_name", type=str, default="split", 
+                                            help="split / combined")
+    # loss
+    parser.add_argument("--loss_name", type=str, default="mse", 
+                                            help="mse / shift_mse / pearson")
+    # model
+    parser.add_argument("--pretrain_name", type=str, default="deberta-v3-large", 
+                                            help="bert-for-patents / deberta-v3-large")
+    parser.add_argument("--model_name", type=str, default="combined_baseline",
+                                            help="combined_baseline / split_baseline")
+    ### split_baseline
+    parser.add_argument("--num_layer", type=int, default=1)
+    # optimizer
+    parser.add_argument("--lr", type=float, default=2e-5)
+    parser.add_argument("--wd", type=float, default=0.01)
+    parser.add_argument("--lr_multi", type=float, default=1)
+    # scheduler
+    # training
+    parser.add_argument("--num_fold", type=int, default=5, 
+                                            help="0/1 for training all")
+    parser.add_argument("--bs", type=int, default=24)
+    parser.add_argument("--epochs", type=int, default=10)
+    # general
+    parser.add_argument("--tag", type=str, default="")
+    parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--nproc_per_node", type=int, default=2)
+
+    opt = parser.parse_args()
+    main(opt)
