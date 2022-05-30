@@ -67,7 +67,7 @@ class DeBertaSplitBaseline(nn.Module):
                 if isinstance(sub_module, nn.Linear):
                     init.kaiming_normal_(sub_module.weight, a=math.sqrt(5))
                     init.zeros_(sub_module.bias)
-        to_init_list = [self.classifier]
+        to_init_list = self.new_model_list
         for module in to_init_list:
             _init_weights(module)
     

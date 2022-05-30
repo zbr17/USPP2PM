@@ -114,7 +114,7 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
             logger.info(f"ValSET - Fold: {index}, Epoch: {epoch}, Acc: {sub_acc}")
             tbwriter.add_scalar(f"fold{index}/val/acc", sub_acc)
             # detect if collapse
-            if sub_acc < 0.5:
+            if sub_acc < 0.3:
                 logger.info("Training collapse!!!")
                 return -1, -1
         
@@ -175,7 +175,6 @@ def main_worker(gpu, config, hparam_dict):
     tbwriter.add_hparams(
         hparam_dict=hparam_dict,
         metric_dict={"hparam/train_acc": 0},
-        run_name=config.save_name,
         progress=-1
     )
 
@@ -206,7 +205,6 @@ def main_worker(gpu, config, hparam_dict):
                             tbwriter.add_hparams(
                                 hparam_dict=hparam_dict,
                                 metric_dict={"hparam/train_acc": -1},
-                                run_name=config.save_name,
                                 progress=-2
                             )
                             exit(1)
@@ -220,7 +218,6 @@ def main_worker(gpu, config, hparam_dict):
                 tbwriter.add_hparams(
                     hparam_dict=hparam_dict,
                     metric_dict={"hparam/train_acc": 0},
-                    run_name=config.save_name,
                     progress=float(fold) / float(config.num_fold)
                 )
             
@@ -232,7 +229,6 @@ def main_worker(gpu, config, hparam_dict):
             tbwriter.add_hparams(
                 hparam_dict=hparam_dict,
                 metric_dict={"hparam/train_acc": final_acc},
-                run_name=config.save_name,
                 progress=1,
             )
 
@@ -271,7 +267,7 @@ if __name__ == "__main__":
     parser.add_argument("--pretrain_name", type=str, default="deberta-v3-large", 
                                             help="bert-for-patents / deberta-v3-large")
     parser.add_argument("--model_name", type=str, default="combined_baseline",
-                                            help="combined_baseline / split_baseline")
+                                            help="combined_baseline / split_baseline / split_similarity")
     ### split_baseline
     parser.add_argument("--num_layer", type=int, default=1)
     # optimizer
