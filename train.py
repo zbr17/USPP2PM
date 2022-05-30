@@ -263,13 +263,17 @@ if __name__ == "__main__":
     # loss
     parser.add_argument("--loss_name", type=str, default="mse", 
                                             help="mse / shift_mse / pearson")
+    ### ExpLoss
+    parser.add_argument("--scale", type=float, default=1.0)
     # model
     parser.add_argument("--pretrain_name", type=str, default="deberta-v3-large", 
                                             help="bert-for-patents / deberta-v3-large")
     parser.add_argument("--model_name", type=str, default="combined_baseline",
                                             help="combined_baseline / split_baseline / split_similarity")
-    ### split_baseline
     parser.add_argument("--num_layer", type=int, default=1)
+    ### combined_hdc
+    parser.add_argument("--num_block", type=int, default=1)
+    parser.add_argument("--update_rate", type=float, default=0.01)
     # optimizer
     parser.add_argument("--lr", type=float, default=2e-5)
     parser.add_argument("--wd", type=float, default=0.01)

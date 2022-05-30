@@ -1,6 +1,7 @@
 from .deberta_combined_baseline import DeBertaCombinedBaseline
 from .deberta_split_baseline import DeBertaSplitBaseline
 from .deberta_split_similarity import DeBertaSplitSimilarity
+from .deberta_combined_hdc import DeBertaCombinedHDC
 # from .bert_patents import BertPatentCombined
 
 from .deberta_tokenizer import give_deberta_tokenizer
@@ -20,6 +21,10 @@ _model_dict = {
     "split_similarity": {
         "deberta-v3-large": DeBertaSplitSimilarity,
         "deberta-v3-base": DeBertaSplitSimilarity,
+    },
+    "combined_hdc": {
+        "deberta-v3-large": DeBertaCombinedHDC,
+        "deberta-v3-base": DeBertaCombinedHDC,
     }
 }
 

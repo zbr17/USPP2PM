@@ -73,6 +73,7 @@ def train_one_epoch(
 
         # update
         optimizer.zero_grad()
+        
         loss.backward()
         optimizer.step()
         loss_meter.append(loss.item())
