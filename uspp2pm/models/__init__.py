@@ -1,41 +1,39 @@
-from .deberta_combined_baseline import DeBertaCombinedBaseline
-from .deberta_split_baseline import DeBertaSplitBaseline
-from .deberta_split_similarity import DeBertaSplitSimilarity
-from .deberta_combined_hdc import DeBertaCombinedHDC
-# from .bert_patents import BertPatentCombined
+from transformers.models.deberta_v2 import DebertaV2ForSequenceClassification
+from transformers.models.bert.modeling_bert import BertForSequenceClassification
 
-from .deberta_tokenizer import give_deberta_tokenizer
-# from .bert_tokenizer import give_bert_tokenizer
+from transformers.models.deberta_v2 import DebertaV2Tokenizer
+from transformers.models.bert.tokenization_bert import BertTokenizer
 
+from .combined_baseline import CombinedBaseline
+from .split_baseline import SplitBaseline
+from .split_similarity import SplitSimilarity
+from .combined_hdc import CombinedHDC
+
+from .tokenizer import _init_tokenizer
 from .losses import give_criterion
 
 _model_dict = {
-    "combined_baseline": {
-        "deberta-v3-large": DeBertaCombinedBaseline,
-        "deberta-v3-base": DeBertaCombinedBaseline,
-    },
-    "split_baseline": {
-        "deberta-v3-large": DeBertaSplitBaseline,
-        "deberta-v3-base": DeBertaSplitBaseline,
-    },
-    "split_similarity": {
-        "deberta-v3-large": DeBertaSplitSimilarity,
-        "deberta-v3-base": DeBertaSplitSimilarity,
-    },
-    "combined_hdc": {
-        "deberta-v3-large": DeBertaCombinedHDC,
-        "deberta-v3-base": DeBertaCombinedHDC,
-    }
+    "combined_baseline": CombinedBaseline,
+    "split_baseline": SplitBaseline,
+    "split_similarity": SplitSimilarity,
+    "combined_hdc": CombinedHDC
+}
+
+_pretrain_dict = {
+    "deberta-v3-base": DebertaV2ForSequenceClassification,
+    "deberta-v3-large": DebertaV2ForSequenceClassification,
+    "bert-for-patents": BertForSequenceClassification
 }
 
 _tokenizer_dict = {
-    "deberta-v3-large": give_deberta_tokenizer,
-    "deberta-v3-base": give_deberta_tokenizer,
+    "deberta-v3-large": DebertaV2Tokenizer,
+    "deberta-v3-base": DebertaV2Tokenizer,
+    "bert-for-patents": BertTokenizer,
 }
 
 def give_tokenizer(config):
     _meta_tokenizer_class = _tokenizer_dict[config.pretrain_name]
-    tokenizer = _meta_tokenizer_class(config)
+    tokenizer = _init_tokenizer(_meta_tokenizer_class, config)
     return tokenizer
 
 def give_model(config):
@@ -47,6 +45,7 @@ def give_model(config):
     # get criterion
     criterion = give_criterion(config)
     # initialize
-    _meta_model = _model_dict[model_name][pretrain_name]
-    model = _meta_model(criterion, config)
+    _pretrain = _pretrain_dict[pretrain_name]
+    _meta_model = _model_dict[model_name]
+    model = _meta_model(criterion, _pretrain, config)
     return model

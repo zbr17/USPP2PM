@@ -4,8 +4,6 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from transformers.models.bert.modeling_bert import BertForSequenceClassification
-
 class BertPatentCombined(nn.Module):
     """
     Without dropout in the final layer.
@@ -24,6 +22,7 @@ class BertPatentCombined(nn.Module):
             pretrained_model_name_or_path=cache_dir,
             num_labels=1
         )
+        raise NotImplementedError()
     
     def forward(
         self,

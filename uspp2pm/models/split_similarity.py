@@ -7,8 +7,6 @@ import torch.nn.init as init
 import torch.nn.functional as F
 from torch import Tensor
 
-from transformers.models.deberta_v2 import DebertaV2ForSequenceClassification
-
 class Mlp(nn.Module):
     def __init__(self, size_list=[7,64,2]):
         super().__init__()
@@ -19,7 +17,6 @@ class Mlp(nn.Module):
         for i in range(self.num_layer):
             self.layer_list.append(nn.Linear(self.size_list[i], self.size_list[i+1]))
             if i != self.num_layer-1:
-                # self.layer_list.append(nn.BatchNorm1d(self.size_list[i+1]))
                 self.layer_list.append(nn.LeakyReLU(inplace=True))
         self.layer_list = nn.ModuleList(self.layer_list)
     
@@ -28,13 +25,14 @@ class Mlp(nn.Module):
             x = module(x)
         return x
 
-class DeBertaSplitSimilarity(nn.Module):
+class SplitSimilarity(nn.Module):
     """
     Split with similarity modules
     """
     def __init__(
         self, 
         criterion,
+        pretrain,
         config
     ):
         super().__init__()
@@ -43,7 +41,7 @@ class DeBertaSplitSimilarity(nn.Module):
         num_layer = config.num_layer
         # initialize
         self.criterion = criterion
-        self.model = DebertaV2ForSequenceClassification.from_pretrained(
+        self.model = pretrain.from_pretrained(
             pretrained_model_name_or_path=cache_dir,
             num_labels=1
         )
@@ -108,7 +106,7 @@ class DeBertaSplitSimilarity(nn.Module):
 
         if self.training:
             # compute losses
-            loss = self.criterion(logits, labels)
+            loss = self.criterion(logits, labels).mean()
             return logits, loss
         else:
             return logits

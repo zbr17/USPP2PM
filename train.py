@@ -274,6 +274,8 @@ if __name__ == "__main__":
     ### combined_hdc
     parser.add_argument("--num_block", type=int, default=1)
     parser.add_argument("--update_rate", type=float, default=0.01)
+    parser.add_argument("--dropout", type=float, default=0.5)
+    parser.add_argument("--growth_rate", type=int, default=2)
     # optimizer
     parser.add_argument("--lr", type=float, default=2e-5)
     parser.add_argument("--wd", type=float, default=0.01)
