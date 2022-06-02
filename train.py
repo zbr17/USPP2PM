@@ -93,6 +93,7 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
     cur_acc = 0
 
     # get warming up optimizer
+    config.epoch = 0
     optimizer, scheduler = give_warming_optim(model, config)
     logger.info(f"Warming epoch")
     logger.info("Start to warm...")
@@ -104,7 +105,7 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
     # get optimizer and scheduler
     optimizer, scheduler = give_optim(model, config)
 
-    for epoch in range(config.epochs):
+    for epoch in range(1, config.epochs+1):
         config.epoch = epoch
         logger.info(f"Epoch: {epoch}")
         # Start to train
@@ -245,7 +246,7 @@ def main_worker(gpu, config, hparam_dict):
 def main(opt):
     config, hparam_dict = get_config(opt)
     if config.nproc_per_node > 1:
-        mp.spawn(main_worker, nprocs=config.nproc_per_node, args=(config,))
+        mp.spawn(main_worker, nprocs=config.nproc_per_node, args=(config, hparam_dict))
     else:
         main_worker(0, config, hparam_dict)
 
