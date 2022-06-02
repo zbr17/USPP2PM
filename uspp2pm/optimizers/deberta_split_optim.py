@@ -18,7 +18,7 @@ def add_params(model_list, is_include=True):
             params_list += [p for n, p in module.named_parameters() if n not in decay_parameters]
     return params_list
 
-def give_deberta_split_optimizer(model: nn.Module, config):
+def give_split_optimizer(model: nn.Module, config):
     if isinstance(model, DDP):
         model = model.module
     
@@ -38,6 +38,32 @@ def give_deberta_split_optimizer(model: nn.Module, config):
         "lr": base_lr,
         "weight_decay": 0.0
     })
+
+    # head params 
+    optim_args.append({
+        "params": add_params(model.new_model_list, is_include=True),
+        "lr": head_lr,
+        "weight_decay": config.wd
+    })
+
+    # head params (no wd)
+    optim_args.append({
+        "params": add_params(model.new_model_list, is_include=False),
+        "lr": head_lr,
+        "weight_decay": 0.0
+    })
+
+    optimizer = optim.AdamW(params=optim_args)
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=config.sche_step, gamma=config.sche_decay)
+
+    return optimizer, scheduler
+
+def give_warming_split_optimizer(model: nn.Module, config):
+    if isinstance(model, DDP):
+        model = model.module
+    
+    optim_args = []
+    head_lr = config.lr * config.lr_multi
 
     # head params 
     optim_args.append({

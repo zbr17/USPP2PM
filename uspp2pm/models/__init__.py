@@ -1,7 +1,9 @@
-from transformers.models.deberta_v2 import DebertaV2ForSequenceClassification
+from transformers.models.deberta_v2 import DebertaV2Model
+from transformers.models.roberta.modeling_roberta import RobertaModel
 from transformers.models.bert.modeling_bert import BertForSequenceClassification
 
 from transformers.models.deberta_v2 import DebertaV2Tokenizer
+from transformers.models.roberta.tokenization_roberta import RobertaTokenizer
 from transformers.models.bert.tokenization_bert import BertTokenizer
 
 from .combined_baseline import CombinedBaseline
@@ -20,14 +22,16 @@ _model_dict = {
 }
 
 _pretrain_dict = {
-    "deberta-v3-base": DebertaV2ForSequenceClassification,
-    "deberta-v3-large": DebertaV2ForSequenceClassification,
+    "deberta-v3-base": DebertaV2Model,
+    "deberta-v3-large": DebertaV2Model,
+    "roberta-base": RobertaModel,
     "bert-for-patents": BertForSequenceClassification
 }
 
 _tokenizer_dict = {
     "deberta-v3-large": DebertaV2Tokenizer,
     "deberta-v3-base": DebertaV2Tokenizer,
+    "roberta-base": RobertaTokenizer,
     "bert-for-patents": BertTokenizer,
 }
 

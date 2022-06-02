@@ -5,7 +5,6 @@ import os
 import sys
 import socket
 import datetime
-from matplotlib import backends
 
 hostname = socket.gethostname()
 if hostname != "zebra":
@@ -27,7 +26,7 @@ from uspp2pm import logger, tbwriter
 from uspp2pm.utils import compute_metrics
 from uspp2pm.datasets import give_rawdata, give_collate_fn, give_dataset
 from uspp2pm.models import give_tokenizer, give_model
-from uspp2pm.optimizers import give_optim
+from uspp2pm.optimizers import give_optim, give_warming_optim
 from uspp2pm.engine import train_one_epoch, predict
 
 _COLLAPSE_REPEAT = 5
@@ -90,11 +89,21 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
     if dist.is_initialized():
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[config.rank])
 
+    best_val_acc, best_epoch = -1, 0
+    cur_acc = 0
+
+    # get warming up optimizer
+    optimizer, scheduler = give_warming_optim(model, config)
+    logger.info(f"Warming epoch")
+    logger.info("Start to warm...")
+    preds, labels = train_one_epoch(model, collate_fn, train_set, optimizer, scheduler, config)
+    sub_acc = compute_metrics((preds, labels))["pearson"]
+    logger.info(f"TrainSET - Fold: {index}, Acc: {sub_acc}")
+    tbwriter.add_scalar(f"fold{index}/train/acc", sub_acc)
+
     # get optimizer and scheduler
     optimizer, scheduler = give_optim(model, config)
 
-    best_val_acc, best_epoch = -1, 0
-    cur_acc = 0
     for epoch in range(config.epochs):
         config.epoch = epoch
         logger.info(f"Epoch: {epoch}")
@@ -270,7 +279,10 @@ if __name__ == "__main__":
                                             help="bert-for-patents / deberta-v3-large")
     parser.add_argument("--model_name", type=str, default="combined_baseline",
                                             help="combined_baseline / split_baseline / split_similarity")
+    parser.add_argument("--handler_name", type=str, default="hidden_cls_emb",
+                                            help="cls_emb / hidden_cls_emb / max_pooling / mean_max_pooling / hidden_cls_emb / hidden_weighted_cls_emb / hidden_lstm_cls_emb / hidden_attention_cls_emb")
     parser.add_argument("--num_layer", type=int, default=1)
+    parser.add_argument("--output_dim", type=int, default=768)
     ### combined_hdc
     parser.add_argument("--num_block", type=int, default=1)
     parser.add_argument("--update_rate", type=float, default=0.01)

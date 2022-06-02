@@ -6,6 +6,8 @@ import torch.nn as nn
 import torch.nn.init as init
 from torch import Tensor
 
+from .handler import give_handler
+
 class Mlp(nn.Module):
     def __init__(self, size_list=[7,64,2]):
         super().__init__()
@@ -38,14 +40,19 @@ class CombinedBaseline(nn.Module):
         # get args
         cache_dir = config.model_path
         num_layer = config.num_layer
+        self.output_dim = config.output_dim
         # initialize
         self.criterion = criterion
         self.model = pretrain.from_pretrained(
             pretrained_model_name_or_path=cache_dir,
             num_labels=1
         )
-        self.output_dim = self.model.pooler.output_dim
-        self.model.classifier = nn.Identity()
+        meta_handler = give_handler(config)
+        self.model.config.output_hidden_states = meta_handler.output_hidden_states
+        self.output_dim = int(self.output_dim * meta_handler.multiply)
+        config.num_hidden_layers = self.model.config.num_hidden_layers
+        self.handler = meta_handler(config)
+
         if num_layer == 1:
             self.classifier = nn.Linear(self.output_dim, 1)
         else:
@@ -54,6 +61,8 @@ class CombinedBaseline(nn.Module):
         
         self.base_model_list = [self.model]
         self.new_model_list = [self.classifier]
+        if self.handler.trainable:
+            self.new_model_list.append(self.handler)
         self.init_weights()
     
     def init_weights(self):
@@ -71,20 +80,14 @@ class CombinedBaseline(nn.Module):
         data_info: dict,
         labels: Optional[Tensor] = None
     ) -> Tuple[Tensor, Tensor]:
-        input_ids = data_info["inputs"]["input_ids"]
-        attention_mask = data_info["inputs"]["attention_mask"]
-        token_type_ids = data_info["inputs"]["token_type_ids"]
+        outputs = self.model(**data_info["inputs"])
 
-        outputs = self.model.deberta(
-            input_ids,
-            token_type_ids=token_type_ids,
-            attention_mask=attention_mask
-        )
+        # encoder_layer = outputs[0]
+        # pooled_output = self.model.pooler(encoder_layer)
+        # pooled_output = self.model.dropout(pooled_output)
+        embeddings = self.handler(outputs, data_info)
 
-        encoder_layer = outputs[0]
-        pooled_output = self.model.pooler(encoder_layer)
-        pooled_output = self.model.dropout(pooled_output)
-        logits = self.classifier(pooled_output)
+        logits = self.classifier(embeddings)
         logits = torch.sigmoid(logits).squeeze()
 
         if self.training:
@@ -93,3 +96,4 @@ class CombinedBaseline(nn.Module):
             return logits, loss
         else:
             return logits
+
