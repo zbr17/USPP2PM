@@ -118,8 +118,9 @@ def predict(
         return torch.cat(pred_list, dim=0).cpu().numpy()
 
 def process_out(data, config):
-    if config.loss_name == "shift_mse":
-        data = torch.floor(data * 5) * 0.25
-        return data
+    if config.loss_name == "cross_entropy":
+        out = torch.argmax(data, dim=-1)
+        out = out * 0.25
+        return out
     else:
         return data

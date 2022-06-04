@@ -28,7 +28,7 @@ class Mlp(nn.Module):
             x = module(x)
         return x
 
-class CombinedHDC(nn.Module):
+class CombinedHDCV2(nn.Module):
     """
     Hard-aware deeply cascaded.
     """
@@ -66,19 +66,10 @@ class CombinedHDC(nn.Module):
         self.init_ensemble()
 
         # initiate block ensemble
-        in_dim = self.output_dim
         for i in range(self.num_block):
-            hid_dim = in_dim * growth_rate
-            out_dim = in_dim
-            size_list = [in_dim] + [hid_dim] * (num_layer-1) + [out_dim]
-            sub_block = Mlp(size_list=size_list, dropout=dropout)
-            self.new_model_list.append(sub_block)
-            setattr(self, f"block{i}", sub_block)
-
-            sub_embedder = nn.Linear(out_dim, 1)
+            sub_embedder = nn.Linear(self.output_dim, 1)
             self.new_model_list.append(sub_embedder)
             setattr(self, f"embedder{i}", sub_embedder)
-            in_dim = out_dim
         
         self.init_weights()
     
@@ -105,16 +96,15 @@ class CombinedHDC(nn.Module):
     ) -> Tuple[Tensor, Tensor]:
         outputs = self.model(**data_info["inputs"])
         feature = self.handler(outputs, data_info)
+        assert len(feature) == self.num_block
 
         # hard-aware deeply cascaded module
         loss_list = []
         out_list = []
         self.ensemble.fresh()
         for i in range(self.num_block):
-            sub_block = getattr(self, f"block{i}")
             sub_embedder = getattr(self, f"embedder{i}")
-            feature = sub_block(feature)
-            out = torch.sigmoid(sub_embedder(feature)).squeeze()
+            out = 1.25 * torch.sigmoid(sub_embedder(feature[i])).squeeze() - 0.125
             out_list.append(out)
             
             if self.training:

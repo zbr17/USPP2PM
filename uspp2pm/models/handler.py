@@ -224,6 +224,38 @@ class HiddenAttentionClsEmb(nn.Module):
         out = self.dropout(out)
         return out
 
+class HiddenBranchMeanMaxPooling(nn.Module):
+    multiply = 2
+    output_hidden_states = True
+    trainable = False
+    def __init__(self, config):
+        super().__init__()
+        self.num_block = config.num_block
+    
+    def compute_meanmax(self, data, mask):
+        # compute mean embeddings
+        sum_embeddings = torch.sum(data * mask, dim=1)
+        sum_mask = torch.sum(mask, dim=1).clamp(min=1e-9)
+        mean_embeddings = sum_embeddings / sum_mask
+        # compute max embeddings
+        state_clone = data.clone()
+        state_clone[mask == 0] = -1e9
+        max_embeddings = torch.max(state_clone, dim=1)[0]
+        
+        embeddings = torch.cat([mean_embeddings, max_embeddings], dim=-1)
+        return embeddings
+
+    def forward(self, outputs, data_info):
+        all_hidden_states = torch.stack(outputs[1])
+        attention_mask = data_info["inputs"]["attention_mask"]
+        input_mask_expanded = attention_mask.unsqueeze(-1).expand(all_hidden_states[-1].size()).float()
+        output_list = []
+        for idx in range(-self.num_block, 0):
+            hidden_state = all_hidden_states[idx]
+            embeddings = self.compute_meanmax(hidden_state, input_mask_expanded)
+            output_list.append(embeddings)
+        return output_list
+
 _handler_dict = {
     "cls_emb": ClsEmb,
     "mean_pooling": MeanPooling,
@@ -234,7 +266,8 @@ _handler_dict = {
     "hidden_2_cls_mean_max_pooling": Hidden2ClsMeanMaxPooling,
     "hidden_weighted_cls_emb": HiddenWeightedClsEmb,
     "hidden_lstm_cls_emb": HiddenLSTMClsEmb,
-    "hidden_attention_cls_emb": HiddenAttentionClsEmb
+    "hidden_attention_cls_emb": HiddenAttentionClsEmb,
+    "hidden_branch_mean_max_pooling": HiddenBranchMeanMaxPooling
 }
 
 def give_handler(config):

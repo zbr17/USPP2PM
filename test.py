@@ -1,9 +1,8 @@
-#%%
 import os
 import sys
 import socket
 import datetime
-from matplotlib import backends
+import yaml
 
 hostname = socket.gethostname()
 if hostname != "zebra":
@@ -21,64 +20,26 @@ import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
-from uspp2pm import logger
+from uspp2pm import logger, tbwriter
 from uspp2pm.utils import compute_metrics
 from uspp2pm.datasets import give_rawdata, give_collate_fn, give_dataset
 from uspp2pm.models import give_tokenizer, give_model
-from uspp2pm.optimizers import give_optim
-from uspp2pm.losses import give_criterion
+from uspp2pm.optimizers import give_optim, give_warming_optim
 from uspp2pm.engine import train_one_epoch, predict
 
-#%%
-class CONFIG:
-    nproc_per_node = 1
-    is_distributed = nproc_per_node > 1
-    dataset_name = "combined"
-    # losses
-    loss_name = None # mse / shift_mse / pearson
-    # models
-    pretrain_name = None # bert-for-patents / deberta-v3-large
-    infer_name = "test"
-    # training
-    lr = 2e-5
-    wd = 0.01
-    num_fold = None # 0/1 for training all
-    epochs = None
-    bs = None
-    num_workers = 12
-    lr_multi = 10
-    sche_step = 5
-    sche_decay = 0.5
-    # log
-    tag = ""
-    # general
-    seed = 42
-    dist_port = 12346
-
-def get_config():
-    parser = argparse.ArgumentParser("US patent model")
-    parser.add_argument("--evaluate", action="store_true")
-    parser.add_argument("--num_fold", type=int, default=5)
-    parser.add_argument("--pretrain_name", type=str, default="deberta-v3-large")
-    parser.add_argument("--loss_name", type=str, default="mse")
-    parser.add_argument("--bs", type=int, default=16)
-    parser.add_argument("--epochs", type=int, default=10)
-
-    opt = parser.parse_args(args=[])
-    opt.evaluate = False
+def get_config(opt):
     config = CONFIG()
     config.is_kaggle = is_kaggle
-    config.is_training = not opt.evaluate
-    config.is_evaluation = opt.evaluate
+    config.is_training = False
+    config.is_evaluation = True
+
+    hparam_dict = {}
     def update_param(name, config, opt):
-        ori_value = getattr(config, name)
-        if ori_value is None:
-            setattr(config, name, getattr(opt, name))
-    update_param("num_fold", config, opt)
-    update_param("pretrain_name", config, opt)
-    update_param("bs", config, opt)
-    update_param("epochs", config, opt)
-    update_param("loss_name", config, opt)
+        hparam_dict[name] = getattr(opt, name)
+        setattr(config, name, getattr(opt, name))
+    for k in dir(opt):
+        if not k.startswith("_") and not k.endswith("_"):
+            update_param(k, config, opt)
 
     # dataset
     config.input_path = (
@@ -94,20 +55,24 @@ def get_config():
     # model
     config.model_path = (
         f"./pretrains/{config.pretrain_name}" if not config.is_kaggle
-        else f"/kaggle/input/{config.pretrain_name}"
+        else f"/kaggle/input/{config.pretrain_name}/{config.pretrain_name}"
     )
     config.model_path_infer = (
         f"./out/{config.infer_name}/" if not config.is_kaggle
         else f"/kaggle/input/{config.infer_name}"
     )
     # log
-    config.tag = config.tag + f"{config.pretrain_name}_{config.dataset_name}_{config.loss_name}-N{config.num_fold}"
-    config.save_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M')}_{config.tag}"
+    name = "-".join([k[:5].upper() + str(v) for k, v in hparam_dict.items()])
+    config.tag = config.tag + "-" + name
+    config.save_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M')}-{config.tag}"
     config.save_path = (
         f"./out/{config.save_name}/" if not config.is_kaggle
         else f"/kaggle/working/"
     )
-    return config
+    if config.debug:
+        config.save_path = f"./out/debug"
+    config.is_distributed = config.nproc_per_node > 1
+    return config, hparam_dict
 
 #%%
 def run_test(index, test_data, tokenizer, collate_fn, config):
@@ -126,17 +91,38 @@ def run_test(index, test_data, tokenizer, collate_fn, config):
 
     return preds
 
-config = get_config()
-# initiate logger
-logger.config_logger(output_dir=config.save_path)
+def load_config(path, config):
+    with open(os.path.join(path, "config.yaml"), mode="r", encoding="utf-8") as f:
+        config_dict = yaml.load(f, Loader=yaml.FullLoader)
+        config_dict.pop("infer_name")
+        config_dict.pop("model_path_infer")
+        config_dict.pop("input_path")
+        config_dict.pop("title_path")
+        config_dict.pop("model_path")
+        config_dict.pop("save_path")
+        config_dict.pop("is_kaggle")
+        config_dict.pop("train_data_path")
+        config_dict.pop("test_data_path")
+    
+    for k, v in config_dict.items():
+        setattr(config, k, v)
 
-# get dataset
-train_data, test_data = give_rawdata("train", config), give_rawdata("test", config)
-tokenizer = give_tokenizer(config)
-collate_fn = give_collate_fn(tokenizer, config)
+def main(opt):
+    config, hparam_dict = get_config(opt)
+    # initiate logger
+    logger.config_logger(output_dir=config.save_path)
+    load_config(config.model_path_infer, config)
+    config.device = torch.device("cuda:0")
+    for k in dir(config):
+        if not k.startswith("_") and not k.endswith("_"):
+            print(f"{k}: {getattr(config, k)}")
 
-# training phase
-if config.is_evaluation:
+    # get dataset
+    train_data, test_data = give_rawdata("train", config), give_rawdata("test", config)
+    tokenizer = give_tokenizer(config)
+    collate_fn = give_collate_fn(tokenizer, config)
+
+    # test phase
     preds_all = []
     if config.num_fold < 2:
         preds = run_test("all", test_data, tokenizer, collate_fn, config)
@@ -152,4 +138,60 @@ if config.is_evaluation:
         'score': predictions,
     })
     submission.to_csv(os.path.join(config.save_path, 'submission.csv'), index=False)
-    
+
+class CONFIG:
+    # dataset
+    # loss
+    # model
+    infer_name = "202206021034--bs24-datascombined-debugfalse-dropo0"
+    # optimizer
+    # scheduler
+    sche_step = 5
+    sche_decay = 0.5
+    # training 
+    num_workers = 8
+    # general
+    seed = 42
+    dist_port = 12346
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser("US patent model")
+    # dataset
+    parser.add_argument("--dataset_name", type=str, default="split", 
+                                            help="split / combined")
+    # loss
+    parser.add_argument("--loss_name", type=str, default="mse", 
+                                            help="mse / shift_mse / pearson")
+    ### ExpLoss
+    parser.add_argument("--scale", type=float, default=1.0)
+    # model
+    parser.add_argument("--pretrain_name", type=str, default="deberta-v3-large", 
+                                            help="bert-for-patents / deberta-v3-large")
+    parser.add_argument("--model_name", type=str, default="combined_baseline",
+                                            help="combined_baseline / split_baseline / split_similarity")
+    parser.add_argument("--handler_name", type=str, default="hidden_cls_emb",
+                                            help="cls_emb / hidden_cls_emb / max_pooling / mean_max_pooling / hidden_cls_emb / hidden_weighted_cls_emb / hidden_lstm_cls_emb / hidden_attention_cls_emb")
+    parser.add_argument("--num_layer", type=int, default=1)
+    parser.add_argument("--output_dim", type=int, default=768)
+    ### combined_hdc
+    parser.add_argument("--num_block", type=int, default=1)
+    parser.add_argument("--update_rate", type=float, default=0.01)
+    parser.add_argument("--dropout", type=float, default=0.5)
+    parser.add_argument("--growth_rate", type=int, default=2)
+    # optimizer
+    parser.add_argument("--lr", type=float, default=2e-5)
+    parser.add_argument("--wd", type=float, default=0.01)
+    parser.add_argument("--lr_multi", type=float, default=1)
+    # scheduler
+    # training
+    parser.add_argument("--num_fold", type=int, default=5, 
+                                            help="0/1 for training all")
+    parser.add_argument("--bs", type=int, default=24)
+    parser.add_argument("--epochs", type=int, default=10)
+    # general
+    parser.add_argument("--tag", type=str, default="")
+    parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--nproc_per_node", type=int, default=2)
+
+    opt = parser.parse_args(args=[])
+    main(opt)

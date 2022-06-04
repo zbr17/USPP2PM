@@ -1,10 +1,11 @@
 # U.S. Patent Phrase to Phrase Matching
 
-| date | pretrain model | loss | method | wd | lr | bs | cards | fold | CV | Pub |
-| - | - | - | - | - | - | - | - | - | - | - |
-| 2022-05-15 | deberta-v3-large | mse | combined | 0.01 | 0.00002 | 16 | 2 | 5 | 0.8539 | 0.8326 |
-| 2022-05-16 | deberta-v3-large | mse | combined | 0.01 | 0.00002 | 16 | 2 | 10 | 0.8588 | 0.8351 |
-| **2022-05-26** | **deberta-v3-base** | **mse** | **combined** | **0.01** | **0.00002** | **48** | **1** | **5** | **0.8516** | **0.8214** | 
+| date | pretrain model | loss/method | wd | lr | bs | cards | fold | CV | Pub |
+| - | - | - | - | - | - | - | - | - | - |
+| 2022-05-15 | deberta-v3-large | mse + combined | 0.01 | 0.00002 | 16 | 2 | 5 | 0.8539 | 0.8326 |
+| 2022-05-16 | deberta-v3-large | mse + combined | 0.01 | 0.00002 | 16 | 2 | 10 | 0.8588 | 0.8351 |
+| **2022-05-26** | **deberta-v3-base** | **mse + combined** | **0.01** | **0.00002** | **48** | **1** | **5** | **0.8516** | **0.8214** | 
+| 2022-06-02 | deberta-v3-large | mse + combined + hidden2mean-max | 0.01 | 0.00002 | 16 | 2 | 10 | 0.8576 | 0.8350 |
 
 ## 计划
 

@@ -2,6 +2,7 @@ import torch.nn as nn
 import torch
 
 class PearsonCorr(nn.Module):
+    is_regre = True
     def __init__(self):
         super().__init__()
     

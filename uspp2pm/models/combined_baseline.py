@@ -43,6 +43,7 @@ class CombinedBaseline(nn.Module):
         self.output_dim = config.output_dim
         # initialize
         self.criterion = criterion
+        self.is_regre = getattr(self.criterion, "is_regre", True)
         self.model = pretrain.from_pretrained(
             pretrained_model_name_or_path=cache_dir,
             num_labels=1
@@ -54,9 +55,15 @@ class CombinedBaseline(nn.Module):
         self.handler = meta_handler(config)
 
         if num_layer == 1:
-            self.classifier = nn.Linear(self.output_dim, 1)
+            if self.is_regre:
+                self.classifier = nn.Linear(self.output_dim, 1)
+            else:
+                self.classifier = nn.Linear(self.output_dim, 5)
         else:
-            size_list = [self.output_dim] * num_layer + [1]
+            if self.is_regre:
+                size_list = [self.output_dim] * num_layer + [1]
+            else:
+                size_list = [self.output_dim] * num_layer + [5]
             self.classifier = Mlp(size_list=size_list)
         
         self.base_model_list = [self.model]
@@ -81,14 +88,11 @@ class CombinedBaseline(nn.Module):
         labels: Optional[Tensor] = None
     ) -> Tuple[Tensor, Tensor]:
         outputs = self.model(**data_info["inputs"])
-
-        # encoder_layer = outputs[0]
-        # pooled_output = self.model.pooler(encoder_layer)
-        # pooled_output = self.model.dropout(pooled_output)
         embeddings = self.handler(outputs, data_info)
 
         logits = self.classifier(embeddings)
-        logits = torch.sigmoid(logits).squeeze()
+        if self.is_regre:
+            logits = 1.25 * torch.sigmoid(logits).squeeze() - 0.125
 
         if self.training:
             # compute losses

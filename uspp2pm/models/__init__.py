@@ -1,15 +1,18 @@
 from transformers.models.deberta_v2 import DebertaV2Model
 from transformers.models.roberta.modeling_roberta import RobertaModel
 from transformers.models.bert.modeling_bert import BertForSequenceClassification
+from transformers.models.electra.modeling_electra import ElectraModel
 
 from transformers.models.deberta_v2 import DebertaV2Tokenizer
 from transformers.models.roberta.tokenization_roberta import RobertaTokenizer
 from transformers.models.bert.tokenization_bert import BertTokenizer
+from transformers.models.electra.tokenization_electra import ElectraTokenizer
 
 from .combined_baseline import CombinedBaseline
 from .split_baseline import SplitBaseline
 from .split_similarity import SplitSimilarity
 from .combined_hdc import CombinedHDC
+from .combined_hdc_v2 import CombinedHDCV2
 
 from .tokenizer import _init_tokenizer
 from .losses import give_criterion
@@ -18,14 +21,17 @@ _model_dict = {
     "combined_baseline": CombinedBaseline,
     "split_baseline": SplitBaseline,
     "split_similarity": SplitSimilarity,
-    "combined_hdc": CombinedHDC
+    "combined_hdc": CombinedHDC,
+    "combined_hdc_v2": CombinedHDCV2
 }
 
 _pretrain_dict = {
     "deberta-v3-base": DebertaV2Model,
     "deberta-v3-large": DebertaV2Model,
     "roberta-base": RobertaModel,
-    "bert-for-patents": BertForSequenceClassification
+    "bert-for-patents": BertForSequenceClassification,
+    "electra-base-disc-cola": ElectraModel,
+    "electra-large": ElectraModel
 }
 
 _tokenizer_dict = {
@@ -33,6 +39,8 @@ _tokenizer_dict = {
     "deberta-v3-base": DebertaV2Tokenizer,
     "roberta-base": RobertaTokenizer,
     "bert-for-patents": BertTokenizer,
+    "electra-base-disc-cola": ElectraTokenizer,
+    "electra-large": ElectraTokenizer
 }
 
 def give_tokenizer(config):

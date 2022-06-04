@@ -2,6 +2,7 @@ import torch.nn as nn
 import torch
 
 class ExpLoss(nn.Module):
+    is_regre = True
     def __init__(self, config):
         super().__init__()
         self.scale = config.scale

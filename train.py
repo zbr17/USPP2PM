@@ -1,10 +1,9 @@
 #%%
-from copy import deepcopy
-import logging
 import os
 import sys
 import socket
 import datetime
+import yaml
 
 hostname = socket.gethostname()
 if hostname != "zebra":
@@ -59,8 +58,8 @@ def get_config(opt):
     config.test_data_path = os.path.join(config.input_path, "test.csv")
     # model
     config.model_path = (
-        f"./pretrains/{config.pretrain_name}" if not config.is_kaggle
-        else f"/kaggle/input/{config.pretrain_name}"
+        f"./pretrains/{config.pretrain_name}/{config.pretrain_name}" if not config.is_kaggle
+        else f"/kaggle/input/{config.pretrain_name}/{config.pretrain_name}"
     )
     config.model_path_infer = (
         f"./out/{config.infer_name}/" if not config.is_kaggle
@@ -92,7 +91,7 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
     best_val_acc, best_epoch = -1, 0
     cur_acc = 0
 
-    # get warming up optimizer
+    # warming up
     config.epoch = 0
     optimizer, scheduler = give_warming_optim(model, config)
     logger.info(f"Warming epoch")
@@ -153,6 +152,16 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
     else:
         return None, None
 
+def save_config(path, config):
+    dict_to_save = {}
+    for k in dir(config):
+        if not k.startswith("_") and not k.endswith("_"):
+            v = getattr(config, k)
+            if isinstance(v, (str, float, int, list)):
+                dict_to_save[k] = getattr(config, k)
+    with open(os.path.join(path, "config.yaml"), mode="w", encoding="utf-8") as f:
+        yaml.dump(dict_to_save, f)
+
 def main_worker(gpu, config, hparam_dict):
     # initiate dist
     config.world_size = torch.cuda.device_count()
@@ -178,6 +187,8 @@ def main_worker(gpu, config, hparam_dict):
     # initiate recorder
     logger.config_logger(output_dir=config.save_path, dist_rank=config.rank)
     tbwriter.config(output_dir=config.save_path, dist_rank=config.rank)
+    if config.rank == 0:
+        save_config(config.save_path, config)
     for item in dir(config):
         if not item.startswith("__") and not item.endswith("__"):
             logger.info(f"{item}: {getattr(config, item)}")
@@ -272,7 +283,7 @@ if __name__ == "__main__":
                                             help="split / combined")
     # loss
     parser.add_argument("--loss_name", type=str, default="mse", 
-                                            help="mse / shift_mse / pearson")
+                                            help="mse / shift_mse / pearson / cross_entropy")
     ### ExpLoss
     parser.add_argument("--scale", type=float, default=1.0)
     # model
@@ -281,7 +292,7 @@ if __name__ == "__main__":
     parser.add_argument("--model_name", type=str, default="combined_baseline",
                                             help="combined_baseline / split_baseline / split_similarity")
     parser.add_argument("--handler_name", type=str, default="hidden_cls_emb",
-                                            help="cls_emb / hidden_cls_emb / max_pooling / mean_max_pooling / hidden_cls_emb / hidden_weighted_cls_emb / hidden_lstm_cls_emb / hidden_attention_cls_emb")
+                                            help="cls_emb / hidden_cls_emb / max_pooling / mean_max_pooling / hidden_cls_emb / hidden_weighted_cls_emb / hidden_lstm_cls_emb / hidden_attention_cls_emb /hidden_branch_mean_max_pooling")
     parser.add_argument("--num_layer", type=int, default=1)
     parser.add_argument("--output_dim", type=int, default=768)
     ### combined_hdc
@@ -289,6 +300,8 @@ if __name__ == "__main__":
     parser.add_argument("--update_rate", type=float, default=0.01)
     parser.add_argument("--dropout", type=float, default=0.5)
     parser.add_argument("--growth_rate", type=int, default=2)
+    parser.add_argument("--ensemble_name", type=str, default="hard", 
+                                            help="hard / adaboostr2")
     # optimizer
     parser.add_argument("--lr", type=float, default=2e-5)
     parser.add_argument("--wd", type=float, default=0.01)
