@@ -76,6 +76,8 @@ class CombinedHDCV2(nn.Module):
     def init_ensemble(self):
         if isinstance(self.criterion, nn.MSELoss):
             self.ensemble = give_ensembler(self.criterion, self.config)
+            if isinstance(self.ensemble, nn.Module):
+                self.new_model_list.append(self.ensemble)
         else:
             raise TypeError(f"Invalid loss type: {type(self.criterion)}")
     
@@ -113,8 +115,9 @@ class CombinedHDCV2(nn.Module):
                 tbwriter.add_scalar(f"loss/{i}", loss)
 
         out = self.ensemble.predict(out_list)
-
+        
         if self.training:
+            loss_list.append(self.criterion(out, labels).mean())
             return out, torch.stack(loss_list).sum()
         else:
             return out

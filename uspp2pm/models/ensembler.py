@@ -1,11 +1,15 @@
+from ftplib import error_reply
 import torch
+import torch.nn as nn
 from uspp2pm import tbwriter
 
-class DefaultEnsemble:
+class DefaultEnsemble(nn.Module):
     def __init__(self, config, criterion):
+        super().__init__()
         self.criterion = criterion
+        self.bias = nn.Parameter(torch.ones(config.num_block) / config.num_block)
     
-    def __call__(self, i, labels, out):
+    def forward(self, i, labels, out):
         # compute loss
         loss = torch.mean(self.criterion(out, labels))
         return loss
@@ -14,30 +18,38 @@ class DefaultEnsemble:
         self.info = None
     
     def predict(self, out_list):
-        out_stack = torch.stack(out_list, dim=-1)
-        out = torch.mean(out_stack, dim=-1)
+        out_stack = torch.stack(out_list, dim=-1).detach()
+        # out = torch.mean(out_stack, dim=-1)
+        out = out_stack @ self.bias
         return out
 
-class HardEnsemble:
+class HardEnsemble(nn.Module):
     def __init__(self, config, criterion):
+        super().__init__()
         self.criterion = criterion
+        self.bias = nn.Parameter(torch.ones(config.num_block) / config.num_block)
     
-    def __call__(self, i, labels, out):
+    def forward(self, i, labels, out):
         bs = labels.size(0)
         # generate idx
         if self.info is None:
-            sample_i = torch.arange(bs)
+            loss = torch.mean(self.criterion(out, labels))
         else:
             e_error = (self.info - labels).pow(2)
             # sampling probability
-            sample_p = e_error / torch.sum(e_error)
+            sort_idx = torch.sort(e_error, descending=False)[1]
+            sample_p = sort_idx + 1
+            sample_p = sample_p / torch.sum(sample_p)
             sample_i = torch.multinomial(
                 input=sample_p.float(),
                 num_samples=bs,
                 replacement=True
             )
-        # compute loss
-        loss = torch.mean(self.criterion(out[sample_i], labels[sample_i]))
+            # compute loss
+            loss = torch.mean(self.criterion(
+                out[sort_idx][sample_i], 
+                labels[sort_idx][sample_i])
+            )
         # update info
         self.info = out
         return loss
@@ -46,8 +58,9 @@ class HardEnsemble:
         self.info = None
     
     def predict(self, out_list):
-        out_stack = torch.stack(out_list, dim=-1)
-        out = torch.mean(out_stack, dim=-1)
+        out_stack = torch.stack(out_list, dim=-1).detach()
+        # out = torch.mean(out_stack, dim=-1)
+        out = out_stack @ self.bias
         return out
 
 class AdaboostR2Ensemble:

@@ -31,3 +31,11 @@
     - [ ] 上传kaggle提交结果
     - [ ] 制作汇报PPT
     - [ ] 使用adaboost进行集成
+- 2022-06-05
+    - [ ] 考虑数据的后处理方法
+
+## 说明
+
+- 目前主要使用的方法：
+    - combined_baseline
+    - combined_hdc_v2
