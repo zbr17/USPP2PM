@@ -100,6 +100,10 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
     sub_acc = compute_metrics((preds, labels))["pearson"]
     logger.info(f"TrainSET - Fold: {index}, Acc: {sub_acc}")
     tbwriter.add_scalar(f"fold{index}/train/acc", sub_acc)
+    # detect if collapse
+    if sub_acc < 0.3:
+        logger.info("Training collapse!!!")
+        return -1, -1
 
     # get optimizer and scheduler
     optimizer, scheduler = give_optim(model, config)
@@ -113,6 +117,10 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
         sub_acc = compute_metrics((preds, labels))["pearson"]
         logger.info(f"TrainSET - Fold: {index}, Epoch: {epoch}, Acc: {sub_acc}")
         tbwriter.add_scalar(f"fold{index}/train/acc", sub_acc)
+        # detect if collapse
+        if sub_acc < 0.3:
+            logger.info("Training collapse!!!")
+            return -1, -1
 
         if is_val:
             # Validate
