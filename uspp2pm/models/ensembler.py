@@ -7,6 +7,24 @@ class DefaultEnsemble(nn.Module):
     def __init__(self, config, criterion):
         super().__init__()
         self.criterion = criterion
+    
+    def forward(self, i, labels, out):
+        # compute loss
+        loss = torch.mean(self.criterion(out, labels))
+        return loss
+    
+    def fresh(self):
+        self.info = None
+    
+    def predict(self, out_list):
+        out_stack = torch.stack(out_list, dim=-1).detach()
+        out = torch.mean(out_stack, dim=-1)
+        return out
+    
+class WeightEnsemble(nn.Module):
+    def __init__(self, config, criterion):
+        super().__init__()
+        self.criterion = criterion
         self.bias = nn.Parameter(torch.ones(config.num_block) / config.num_block)
     
     def forward(self, i, labels, out):
@@ -103,6 +121,7 @@ class AdaboostR2Ensemble:
 
 _meta_ensembler = {
     "default": DefaultEnsemble,
+    "weight": WeightEnsemble,
     "hard": HardEnsemble,
     "adaboostr2": AdaboostR2Ensemble
 }

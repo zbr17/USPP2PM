@@ -3,13 +3,15 @@ from .pearson_corr import PearsonCorr
 from .match_loss import MatchLoss
 from .exp_loss import ExpLoss
 from .cross_entropy import CrossEntropy
+from .cachy_loss import CachyLoss
 
 _loss_dict = {
     "mse": MSELoss,
     "pearson": PearsonCorr,
     "match": MatchLoss,
     "exp": ExpLoss,
-    "cross_entropy": CrossEntropy
+    "cross_entropy": CrossEntropy,
+    "cachy": CachyLoss,
 }
 
 def give_criterion(config):

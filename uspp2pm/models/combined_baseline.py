@@ -41,6 +41,7 @@ class CombinedBaseline(nn.Module):
         cache_dir = config.model_path
         num_layer = config.num_layer
         self.output_dim = config.output_dim
+        self.adjust = config.adjust
         # initialize
         self.criterion = criterion
         self.is_regre = getattr(self.criterion, "is_regre", True)
@@ -92,7 +93,10 @@ class CombinedBaseline(nn.Module):
 
         logits = self.classifier(embeddings)
         if self.is_regre:
-            logits = 1.25 * torch.sigmoid(logits).squeeze() - 0.125
+            if self.adjust:
+                logits = 1.25 * torch.sigmoid(logits).squeeze() - 0.125
+            else:
+                logits = torch.sigmoid(logits).squeeze()
 
         if self.training:
             # compute losses

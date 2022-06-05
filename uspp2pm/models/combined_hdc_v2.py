@@ -47,6 +47,7 @@ class CombinedHDCV2(nn.Module):
         growth_rate = config.growth_rate
         self.num_block = config.num_block
         self.output_dim = config.output_dim
+        self.adjust = config.adjust
         # initialize
         self.criterion = criterion
         self.model = pretrain.from_pretrained(
@@ -106,7 +107,10 @@ class CombinedHDCV2(nn.Module):
         self.ensemble.fresh()
         for i in range(self.num_block):
             sub_embedder = getattr(self, f"embedder{i}")
-            out = 1.25 * torch.sigmoid(sub_embedder(feature[i])).squeeze() - 0.125
+            if self.adjust:
+                out = 1.25 * torch.sigmoid(sub_embedder(feature[i])).squeeze() - 0.125
+            else:
+                out = torch.sigmoid(sub_embedder(feature[i])).squeeze()
             out_list.append(out)
             
             if self.training:

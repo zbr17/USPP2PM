@@ -133,17 +133,13 @@ def main(opt):
             preds_all.append(preds)
     
     predictions = np.mean(preds_all, axis=0)
-    submission = pd.DataFrame(data={
-        'id': test_data['id'],
-        'score': predictions,
-    })
-    submission.to_csv(os.path.join(config.save_path, 'submission.csv'), index=False)
+    return test_data["id"], predictions, config.save_path
 
 class CONFIG:
     # dataset
     # loss
     # model
-    infer_name = "202206021034--bs24-datascombined-debugfalse-dropo0"
+    infer_name = "202206040003--bs24-datascombined-debugfalse-dropo0"
     # optimizer
     # scheduler
     sche_step = 5
@@ -161,7 +157,7 @@ if __name__ == "__main__":
                                             help="split / combined")
     # loss
     parser.add_argument("--loss_name", type=str, default="mse", 
-                                            help="mse / shift_mse / pearson")
+                                            help="mse / shift_mse / pearson / cross_entropy")
     ### ExpLoss
     parser.add_argument("--scale", type=float, default=1.0)
     # model
@@ -170,14 +166,17 @@ if __name__ == "__main__":
     parser.add_argument("--model_name", type=str, default="combined_baseline",
                                             help="combined_baseline / split_baseline / split_similarity")
     parser.add_argument("--handler_name", type=str, default="hidden_cls_emb",
-                                            help="cls_emb / hidden_cls_emb / max_pooling / mean_max_pooling / hidden_cls_emb / hidden_weighted_cls_emb / hidden_lstm_cls_emb / hidden_attention_cls_emb")
+                                            help="cls_emb / hidden_cls_emb / max_pooling / mean_max_pooling / hidden_cls_emb / hidden_weighted_cls_emb / hidden_lstm_cls_emb / hidden_attention_cls_emb /hidden_branch_mean_max_pooling")
     parser.add_argument("--num_layer", type=int, default=1)
     parser.add_argument("--output_dim", type=int, default=768)
+    parser.add_argument("--adjust", action="store_true")
     ### combined_hdc
     parser.add_argument("--num_block", type=int, default=1)
     parser.add_argument("--update_rate", type=float, default=0.01)
     parser.add_argument("--dropout", type=float, default=0.5)
     parser.add_argument("--growth_rate", type=int, default=2)
+    parser.add_argument("--ensemble_name", type=str, default="hard", 
+                                            help="hard / adaboostr2")
     # optimizer
     parser.add_argument("--lr", type=float, default=2e-5)
     parser.add_argument("--wd", type=float, default=0.01)
@@ -194,4 +193,32 @@ if __name__ == "__main__":
     parser.add_argument("--nproc_per_node", type=int, default=2)
 
     opt = parser.parse_args(args=[])
-    main(opt)
+    
+    infer_name_dict = {
+        "202206040003--bs24-datascombined-debugfalse-dropo0": 
+        {"adjust": False, "ensemble_name": "default"},
+        "202206021034--bs24-datascombined-debugfalse-dropo0":
+        {"adjust": False},
+        "202206041610--bs24-datascombined-debugfalse-dropo0":
+        {"adjust": True}
+    }
+    ids_list = []
+    preds_list = []
+    path = None
+    for k, v in infer_name_dict.items():
+        opt.infer_name = k
+        for subk, subv in v.items():
+            setattr(opt, subk, subv)
+        ids, preds, path = main(opt)
+        ids_list.append(ids)
+        preds_list.append(preds)
+    
+    # average
+    ttl_preds = np.stack(preds_list)
+    ttl_preds = np.mean(ttl_preds, axis=0)
+    # assert np.all(ids_list[0] == ids_list[1])
+    submission = pd.DataFrame(data={
+        'id': ids_list[0],
+        'score': ttl_preds,
+    })
+    submission.to_csv(os.path.join(path, 'submission.csv'), index=False)

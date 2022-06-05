@@ -70,7 +70,7 @@ def get_config(opt):
     config.tag = config.tag + "-" + name
     config.save_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M')}-{config.tag}"
     config.save_path = (
-        f"./out/{config.save_name}/" if not config.is_kaggle
+        f"./out/{config.save_name[:100]}/" if not config.is_kaggle
         else f"/kaggle/working/"
     )
     if config.debug:
@@ -295,6 +295,7 @@ if __name__ == "__main__":
                                             help="cls_emb / hidden_cls_emb / max_pooling / mean_max_pooling / hidden_cls_emb / hidden_weighted_cls_emb / hidden_lstm_cls_emb / hidden_attention_cls_emb /hidden_branch_mean_max_pooling")
     parser.add_argument("--num_layer", type=int, default=1)
     parser.add_argument("--output_dim", type=int, default=768)
+    parser.add_argument("--adjust", action="store_true")
     ### combined_hdc
     parser.add_argument("--num_block", type=int, default=1)
     parser.add_argument("--update_rate", type=float, default=0.01)
