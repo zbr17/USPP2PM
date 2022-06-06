@@ -9,8 +9,10 @@ hostname = socket.gethostname()
 if hostname != "zebra":
     is_kaggle = True
     sys.path.append("/kaggle/input")
+    sys.path.append("/kaggle/input/uspp2pm/dependency/nlpaug")
 else:
     is_kaggle = False
+    sys.path.append("./dependency/nlpaug")
 
 import pandas as pd
 import numpy as np
@@ -28,8 +30,9 @@ from uspp2pm.models import give_tokenizer, give_model
 from uspp2pm.optimizers import give_optim, give_warming_optim
 from uspp2pm.engine import train_one_epoch, predict
 
-_COLLAPSE_REPEAT = 5
+_COLLAPSE_REPEAT = 6
 _CUR_REPEAT = 0
+_COLLAPSE_THRESH = 0.2
 
 def get_config(opt):
     config = CONFIG()
@@ -101,7 +104,7 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
     logger.info(f"TrainSET - Fold: {index}, Acc: {sub_acc}")
     tbwriter.add_scalar(f"fold{index}/train/acc", sub_acc)
     # detect if collapse
-    if sub_acc < 0.3:
+    if sub_acc < _COLLAPSE_THRESH:
         logger.info("Training collapse!!!")
         return -1, -1
 
@@ -118,7 +121,7 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
         logger.info(f"TrainSET - Fold: {index}, Epoch: {epoch}, Acc: {sub_acc}")
         tbwriter.add_scalar(f"fold{index}/train/acc", sub_acc)
         # detect if collapse
-        if sub_acc < 0.3:
+        if sub_acc < _COLLAPSE_THRESH:
             logger.info("Training collapse!!!")
             return -1, -1
 
@@ -131,7 +134,7 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
             logger.info(f"ValSET - Fold: {index}, Epoch: {epoch}, Acc: {sub_acc}")
             tbwriter.add_scalar(f"fold{index}/val/acc", sub_acc)
             # detect if collapse
-            if sub_acc < 0.3:
+            if sub_acc < _COLLAPSE_THRESH:
                 logger.info("Training collapse!!!")
                 return -1, -1
         
@@ -325,6 +328,7 @@ if __name__ == "__main__":
     parser.add_argument("--tag", type=str, default="")
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--nproc_per_node", type=int, default=2)
+    parser.add_argument("--seed", type=int, default=42)
 
     opt = parser.parse_args()
     main(opt)

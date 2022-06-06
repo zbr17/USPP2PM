@@ -75,12 +75,11 @@ class CombinedHDCV2(nn.Module):
         self.init_weights()
     
     def init_ensemble(self):
-        if isinstance(self.criterion, nn.MSELoss):
-            self.ensemble = give_ensembler(self.criterion, self.config)
-            if isinstance(self.ensemble, nn.Module):
-                self.new_model_list.append(self.ensemble)
-        else:
-            raise TypeError(f"Invalid loss type: {type(self.criterion)}")
+        if not isinstance(self.criterion, nn.MSELoss):
+            assert self.config.ensemble_name in ["default", "weight", "rand"], f"Invalid ensemble!"
+        self.ensemble = give_ensembler(self.criterion, self.config)
+        if isinstance(self.ensemble, nn.Module):
+            self.new_model_list.append(self.ensemble)
     
     def init_weights(self):
         def _init_weights(module: nn.Module):

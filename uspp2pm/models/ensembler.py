@@ -41,6 +41,35 @@ class WeightEnsemble(nn.Module):
         out = out_stack @ self.bias
         return out
 
+class RandEnsemble(nn.Module):
+    def __init__(self, config, criterion):
+        super().__init__()
+        self.criterion = criterion
+        self.bias = nn.Parameter(torch.ones(config.num_block) / config.num_block)
+    
+    def forward(self, i, labels, out):
+        bs = int(labels.size(0))
+        # sampling probability
+        sample_p = torch.ones(bs) / bs
+        sample_i = torch.multinomial(
+            input=sample_p.float(),
+            num_samples=bs,
+            replacement=True
+        )
+
+        # compute loss
+        loss = torch.mean(self.criterion(out[sample_i], labels[sample_i]))
+        return loss
+    
+    def fresh(self):
+        self.info = None
+    
+    def predict(self, out_list):
+        out_stack = torch.stack(out_list, dim=-1).detach()
+        # out = torch.mean(out_stack, dim=-1)
+        out = out_stack @ self.bias
+        return out
+
 class HardEnsemble(nn.Module):
     def __init__(self, config, criterion):
         super().__init__()
@@ -48,7 +77,7 @@ class HardEnsemble(nn.Module):
         self.bias = nn.Parameter(torch.ones(config.num_block) / config.num_block)
     
     def forward(self, i, labels, out):
-        bs = labels.size(0)
+        bs = int(labels.size(0))
         # generate idx
         if self.info is None:
             loss = torch.mean(self.criterion(out, labels))
@@ -122,6 +151,7 @@ class AdaboostR2Ensemble:
 _meta_ensembler = {
     "default": DefaultEnsemble,
     "weight": WeightEnsemble,
+    "rand": RandEnsemble,
     "hard": HardEnsemble,
     "adaboostr2": AdaboostR2Ensemble
 }
