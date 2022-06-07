@@ -32,7 +32,7 @@ from uspp2pm.engine import train_one_epoch, predict
 
 _COLLAPSE_REPEAT = 6
 _CUR_REPEAT = 0
-_COLLAPSE_THRESH = 0.2
+_COLLAPSE_THRESH = 0.1
 
 def get_config(opt):
     config = CONFIG()
@@ -281,6 +281,7 @@ class CONFIG:
     # scheduler
     sche_step = 5
     sche_decay = 0.5
+    sche_T = 5
     # training 
     num_workers = 8
     # general

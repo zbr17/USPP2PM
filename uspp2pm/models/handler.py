@@ -88,7 +88,7 @@ class HiddenCatClsEmb(nn.Module):
         super().__init__()
 
     def forward(self, outputs, data_info):
-        all_hidden_states = torch.stack(outputs[1])
+        all_hidden_states = torch.stack(outputs["hidden_states"])
         cat_pool_states = torch.cat([all_hidden_states[-idx] for idx in range(1, 5)], dim=-1)
         cls_embeddings = cat_pool_states[:, 0]
         return cls_embeddings
@@ -101,7 +101,7 @@ class Hidden2MeanMaxPooling(nn.Module):
         super().__init__()
 
     def forward(self, outputs, data_info):
-        all_hidden_states = torch.stack(outputs[1])
+        all_hidden_states = torch.stack(outputs["hidden_states"])
         hidden_state = all_hidden_states[-2]
         attention_mask = data_info["inputs"]["attention_mask"]
         input_mask_expanded = attention_mask.unsqueeze(-1).expand(hidden_state.size()).float()
@@ -125,7 +125,7 @@ class Hidden2ClsMeanMaxPooling(nn.Module):
         super().__init__()
 
     def forward(self, outputs, data_info):
-        all_hidden_states = torch.stack(outputs[1])
+        all_hidden_states = torch.stack(outputs["hidden_states"])
         hidden_state = all_hidden_states[-2]
         cls_state = hidden_state[:, 0]
         other_hidden_state = hidden_state[:, 1:]
@@ -156,7 +156,7 @@ class HiddenWeightedClsEmb(nn.Module):
         ), dtype=torch.float))
     
     def forward(self, outputs, data_info):
-        all_hidden_states = torch.stack(outputs[1])
+        all_hidden_states = torch.stack(outputs["hidden_states"])
         cat_pool_states = all_hidden_states[self.layer_start:, :, :, :]
         weights = self.weights.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).expand(cat_pool_states.size())
 
@@ -178,7 +178,7 @@ class HiddenLSTMClsEmb(nn.Module):
         self.dropout = nn.Dropout(0.1)
     
     def forward(self, outputs, data_info):
-        all_hidden_states = torch.stack(outputs[1])
+        all_hidden_states = torch.stack(outputs["hidden_states"])
         hidden_states = torch.stack([
             all_hidden_states[idx][:, 0].squeeze()
             for idx in range(1, self.num_hidden_layers+1)
@@ -214,7 +214,7 @@ class HiddenAttentionClsEmb(nn.Module):
         return v
     
     def forward(self, outputs, data_info):
-        all_hidden_states = torch.stack(outputs[1])
+        all_hidden_states = torch.stack(outputs["hidden_states"])
         hidden_states = torch.stack([
             all_hidden_states[idx][:, 0].squeeze()
             for idx in range(1, self.num_hidden_layers+1)
@@ -246,7 +246,7 @@ class HiddenBranchMeanMaxPooling(nn.Module):
         return embeddings
 
     def forward(self, outputs, data_info):
-        all_hidden_states = torch.stack(outputs[1])
+        all_hidden_states = torch.stack(outputs["hidden_states"])
         attention_mask = data_info["inputs"]["attention_mask"]
         input_mask_expanded = attention_mask.unsqueeze(-1).expand(all_hidden_states[-1].size()).float()
         output_list = []

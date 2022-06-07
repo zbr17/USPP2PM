@@ -2,7 +2,15 @@ from torch.utils.data import Dataset
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold
 import numpy as np 
-import uspp2pm.logger as logger
+from uspp2pm import logger
+import random
+
+import sys
+sys.path.append("./dependency/nlpaug")
+try:
+    import nlpaug.augmenter.word as naw
+except:
+    print("No nlpaug")
 
 class PatentDatasetCombined(Dataset):
     def __init__(self, data: pd.DataFrame, is_training: bool = True, tokenizer = None):
@@ -14,19 +22,62 @@ class PatentDatasetCombined(Dataset):
         self.inputs = data["input"].values.astype(str)
         if self.is_training:
             self.labels = data["score"].values
+            self.aug = Augs()
     
     def __len__(self) -> int:
         return len(self.inputs)
     
     def __getitem__(self, idx) -> dict:
+        input_data = self.inputs[idx].split("[SEP]")
+        input_data = [item.lower() for item in input_data]
+        if self.is_training: 
+            input_data = [self.aug(item) for item in input_data]
+        input_data = "[SEP]".join(input_data)
+        
         output_dict = {
-            "inputs": self.tokenizer(self.inputs[idx]),
+            "inputs": self.tokenizer(input_data),
         }
         
         if self.is_training:
             output_dict["labels"] = self.labels[idx]
 
         return output_dict
+
+class SynonymAug:
+    def __init__(self, p):
+        self.p = p
+        self.aug = naw.SynonymAug(aug_src="wordnet")
+    
+    def __call__(self, x):
+        if random.random() < self.p:
+            x = self.aug.augment(x)
+        else:
+            x = x
+        return x
+
+class WordEmbsAug:
+    def __init__(self, p):
+        self.p = p
+        self.aug = naw.WordEmbsAug(model_type="word2vec", action="insert")
+    
+    def __call__(self, x):
+        if random.random() < self.p:
+            x = self.aug.augment(x)
+        else:
+            x = x
+        return x
+
+class Augs:
+    def __init__(self):
+        self.aug_list = [
+            # SynonymAug(p=0.3),
+            # WordEmbsAug(p=0.3),
+        ]
+
+    def __call__(self, x):
+        for aug in self.aug_list:
+            x = aug(x)
+        return x
 
 def load_split_data_combined(data_path: str, title_path: str, num_fold: int = 0) -> pd.DataFrame:
     # Load data
@@ -78,3 +129,9 @@ def create_folds(data: pd.DataFrame, num_splits: int) -> pd.DataFrame:
 
     # return dataframe with folds
     return data
+
+if __name__ == "__main__":
+    aug = Augs()
+    test_src = "The quick brown fox jumps over the lazy dog."
+    out = aug(test_src)
+    pass

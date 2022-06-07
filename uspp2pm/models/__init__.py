@@ -1,6 +1,6 @@
 from transformers.models.deberta_v2 import DebertaV2Model
 from transformers.models.roberta.modeling_roberta import RobertaModel
-from transformers.models.bert.modeling_bert import BertForSequenceClassification
+from transformers.models.bert.modeling_bert import BertModel
 from transformers.models.electra.modeling_electra import ElectraModel
 
 from transformers.models.deberta_v2 import DebertaV2Tokenizer
@@ -29,7 +29,7 @@ _pretrain_dict = {
     "deberta-v3-base": DebertaV2Model,
     "deberta-v3-large": DebertaV2Model,
     "roberta-base": RobertaModel,
-    "bert-for-patents": BertForSequenceClassification,
+    "bert-for-patents": BertModel,
     "electra-base-disc-cola": ElectraModel,
     "electra-large": ElectraModel
 }

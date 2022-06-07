@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 
-_data = torch.load("./test/data.ckpt")
+_data = torch.load("./data.ckpt")
 data = _data["data"]
 label = _data["label"]
 
@@ -24,6 +24,11 @@ class PearsonCorr(nn.Module):
         return loss
 
 # TODO: 检查参数是否被添加了正则化！
+
+#%%
+import matplotlib.pyplot as plt
+
+plt.hist(data, bins=30)
 
 #%%
 def process(data, m=0.02):

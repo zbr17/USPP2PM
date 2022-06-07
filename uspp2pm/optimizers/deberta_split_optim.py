@@ -80,6 +80,7 @@ def give_warming_split_optimizer(model: nn.Module, config):
     })
 
     optimizer = optim.AdamW(params=optim_args)
-    scheduler = lr_scheduler.StepLR(optimizer, step_size=config.sche_step, gamma=config.sche_decay)
+    # scheduler = lr_scheduler.StepLR(optimizer, step_size=config.sche_step, gamma=config.sche_decay)
+    scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.sche_T)
 
     return optimizer, scheduler
