@@ -73,8 +73,8 @@ class CombinedBaseline(nn.Module):
             self.new_model_list.append(self.handler)
         self.init_weights()
 
-        targets = torch.arange(5) * 0.25
-        self.register_buffer("targets", targets)
+        # targets = torch.arange(5) * 0.25
+        # self.register_buffer("targets", targets)
     
     def init_weights(self):
         def _init_weights(module: nn.Module):

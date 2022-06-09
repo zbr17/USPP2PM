@@ -257,7 +257,7 @@ def main_worker(gpu, config, hparam_dict):
             )
         
         # Training on full dataset
-        epoch = int(np.mean(best_epoch_list))
+        config.epochs = int(np.mean(best_epoch_list))
         run("all", train_data, None, tokenizer, collate_fn, False, config)
         
         preds_all = np.concatenate(preds_all, axis=0)
