@@ -28,6 +28,7 @@ _model_dict = {
 _pretrain_dict = {
     "deberta-v3-base": DebertaV2Model,
     "deberta-v3-large": DebertaV2Model,
+    "deberta-v2-xlarge": DebertaV2Model,
     "roberta-base": RobertaModel,
     "bert-for-patents": BertModel,
     "electra-base-disc-cola": ElectraModel,
@@ -37,6 +38,7 @@ _pretrain_dict = {
 _tokenizer_dict = {
     "deberta-v3-large": DebertaV2Tokenizer,
     "deberta-v3-base": DebertaV2Tokenizer,
+    "deberta-v2-xlarge": DebertaV2Tokenizer,
     "roberta-base": RobertaTokenizer,
     "bert-for-patents": BertTokenizer,
     "electra-base-disc-cola": ElectraTokenizer,

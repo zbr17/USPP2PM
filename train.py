@@ -37,8 +37,6 @@ _COLLAPSE_THRESH = 0.1
 def get_config(opt):
     config = CONFIG()
     config.is_kaggle = is_kaggle
-    config.is_training = True
-    config.is_evaluation = False
 
     hparam_dict = {}
     def update_param(name, config, opt):
@@ -64,14 +62,17 @@ def get_config(opt):
         f"./pretrains/{config.pretrain_name}/{config.pretrain_name}" if not config.is_kaggle
         else f"/kaggle/input/{config.pretrain_name}/{config.pretrain_name}"
     )
+    if not os.path.exists(config.model_path) and config.is_kaggle:
+        config.model_path = f"/kaggle/input/{config.pretrain_name}"
+    
     config.model_path_infer = (
         f"./out/{config.infer_name}/" if not config.is_kaggle
         else f"/kaggle/input/{config.infer_name}"
     )
     # log
-    name = "-".join([k[:5].upper() + str(v) for k, v in hparam_dict.items()])
-    config.tag = config.tag + "-" + name
-    config.save_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M')}-{config.tag}"
+    name = "-".join([k[:2].upper() + str(v)[:5] for k, v in hparam_dict.items()])
+    config.tag = name
+    config.save_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M')}--{config.tag}"
     config.save_path = (
         f"./out/{config.save_name[:100]}/" if not config.is_kaggle
         else f"/kaggle/working/"
@@ -106,7 +107,7 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
     # detect if collapse
     if sub_acc < _COLLAPSE_THRESH:
         logger.info("Training collapse!!!")
-        return -1, -1
+        return -1, -1, -1, -1
 
     # get optimizer and scheduler
     optimizer, scheduler = give_optim(model, config)
@@ -123,7 +124,7 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
         # detect if collapse
         if sub_acc < _COLLAPSE_THRESH:
             logger.info("Training collapse!!!")
-            return -1, -1
+            return -1, -1, -1, -1
 
         if is_val:
             # Validate
@@ -136,7 +137,7 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
             # detect if collapse
             if sub_acc < _COLLAPSE_THRESH:
                 logger.info("Training collapse!!!")
-                return -1, -1
+                return -1, -1, -1, -1
         
         if config.rank == 0:
             model_params = (
@@ -159,9 +160,9 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
                 torch.save(to_save_dict, os.path.join(config.save_path, f"model_{index}.ckpt"))
     
     if is_val:
-        return preds, labels
+        return preds, labels, best_val_acc, best_epoch
     else:
-        return None, None
+        return None, None, None, None
 
 def save_config(path, config):
     dict_to_save = {}
@@ -200,8 +201,9 @@ def main_worker(gpu, config, hparam_dict):
     tbwriter.config(output_dir=config.save_path, dist_rank=config.rank)
     if config.rank == 0:
         save_config(config.save_path, config)
+    
     for item in dir(config):
-        if not item.startswith("__") and not item.endswith("__"):
+        if not item.startswith("_") and not item.endswith("_"):
             logger.info(f"{item}: {getattr(config, item)}")
     
     tbwriter.add_hparams(
@@ -216,53 +218,64 @@ def main_worker(gpu, config, hparam_dict):
     collate_fn = give_collate_fn(tokenizer, config)
 
     # training phase
-    if config.is_training:
-        
-        if config.num_fold < 2:
-            run("all", train_data, None, tokenizer, collate_fn, False, config)
-        else:
-            preds_all, labels_all = [], []
-            for fold in range(config.num_fold):
-                sub_train_data = train_data[train_data["fold"] != fold].reset_index(drop=True)
-                sub_val_data = train_data[train_data["fold"] == fold].reset_index(drop=True)
+    if config.num_fold < 2:
+        run("all", train_data, None, tokenizer, collate_fn, False, config)
+    else:
+        preds_all, labels_all = [], []
+        val_acc_list, best_epoch_list = [], []
+        for fold in range(config.num_fold):
+            sub_train_data = train_data[train_data["fold"] != fold].reset_index(drop=True)
+            sub_val_data = train_data[train_data["fold"] == fold].reset_index(drop=True)
 
-                is_collapse = True
-                while(is_collapse):
-                    global _CUR_REPEAT
-                    preds, labels = run(fold, sub_train_data, sub_val_data, tokenizer, collate_fn, True, config)
-                    if isinstance(preds, int) and preds == -1:
-                        is_collapse = True
-                        _CUR_REPEAT += 1
-                        if _CUR_REPEAT > _COLLAPSE_REPEAT:
-                            tbwriter.add_hparams(
-                                hparam_dict=hparam_dict,
-                                metric_dict={"hparam/train_acc": -1},
-                                progress=-2
-                            )
-                            exit(1)
-                    else:
-                        is_collapse = False
-                        _CUR_REPEAT = 0
-                
-                preds_all.append(preds)
-                labels_all.append(labels)
-
-                tbwriter.add_hparams(
-                    hparam_dict=hparam_dict,
-                    metric_dict={"hparam/train_acc": 0},
-                    progress=float(fold) / float(config.num_fold)
-                )
+            is_collapse = True
+            while(is_collapse):
+                global _CUR_REPEAT
+                preds, labels, best_val_acc, best_epoch = run(fold, sub_train_data, sub_val_data, tokenizer, collate_fn, True, config)
+                if isinstance(preds, int) and preds == -1:
+                    is_collapse = True
+                    _CUR_REPEAT += 1
+                    if _CUR_REPEAT > _COLLAPSE_REPEAT:
+                        tbwriter.add_hparams(
+                            hparam_dict=hparam_dict,
+                            metric_dict={"hparam/train_acc": -1},
+                            progress=-2
+                        )
+                        exit(1)
+                else:
+                    is_collapse = False
+                    _CUR_REPEAT = 0
             
-            preds_all = np.concatenate(preds_all, axis=0)
-            labels_all = np.concatenate(labels_all, axis=0)
-            final_acc = compute_metrics((preds_all, labels_all))["pearson"]
-            logger.info(f"Final acc: {final_acc}")
-            tbwriter.add_scalar(f"final/train/acc", final_acc)
+            preds_all.append(preds)
+            labels_all.append(labels)
+            val_acc_list.append(best_val_acc)
+            best_epoch_list.append(best_epoch)
+
             tbwriter.add_hparams(
                 hparam_dict=hparam_dict,
-                metric_dict={"hparam/train_acc": final_acc},
-                progress=1,
+                metric_dict={"hparam/train_acc": 0},
+                progress=float(fold) / float(config.num_fold)
             )
+        
+        # Training on full dataset
+        epoch = int(np.mean(best_epoch_list))
+        run("all", train_data, None, tokenizer, collate_fn, False, config)
+        
+        preds_all = np.concatenate(preds_all, axis=0)
+        labels_all = np.concatenate(labels_all, axis=0)
+        # print all fold acc
+        for idx, (val_acc, epoch) in enumerate(zip(val_acc_list, best_epoch_list)):
+            logger.info(f"Fold: {idx}, valAcc: {val_acc}, epoch: {epoch}")
+        logger.info(f"AvgAcc: {np.mean(val_acc_list)}")
+
+        # print train acc
+        final_acc = compute_metrics((preds_all, labels_all))["pearson"]
+        logger.info(f"Final acc: {final_acc}")
+        tbwriter.add_scalar(f"final/train/acc", final_acc)
+        tbwriter.add_hparams(
+            hparam_dict=hparam_dict,
+            metric_dict={"hparam/train_acc": final_acc},
+            progress=1,
+        )
 
 
 def main(opt):
@@ -326,7 +339,6 @@ if __name__ == "__main__":
     parser.add_argument("--bs", type=int, default=24)
     parser.add_argument("--epochs", type=int, default=10)
     # general
-    parser.add_argument("--tag", type=str, default="")
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--nproc_per_node", type=int, default=2)
     parser.add_argument("--seed", type=int, default=42)

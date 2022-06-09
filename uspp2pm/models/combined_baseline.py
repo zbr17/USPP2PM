@@ -72,6 +72,9 @@ class CombinedBaseline(nn.Module):
         if self.handler.trainable:
             self.new_model_list.append(self.handler)
         self.init_weights()
+
+        targets = torch.arange(5) * 0.25
+        self.register_buffer("targets", targets)
     
     def init_weights(self):
         def _init_weights(module: nn.Module):
@@ -92,11 +95,14 @@ class CombinedBaseline(nn.Module):
         embeddings = self.handler(outputs, data_info)
 
         logits = self.classifier(embeddings)
+        # logits = torch.softmax(logits, dim=-1)
+        # logits = logits @ self.targets
+        
         if self.is_regre:
             if self.adjust:
-                logits = 1.25 * torch.sigmoid(logits).squeeze() - 0.125
+                logits = 1.25 * torch.sigmoid(logits).squeeze(1) - 0.125
             else:
-                logits = torch.sigmoid(logits).squeeze()
+                logits = torch.sigmoid(logits).squeeze(1)
 
         if self.training:
             # compute losses

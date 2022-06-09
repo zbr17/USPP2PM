@@ -8,8 +8,10 @@ hostname = socket.gethostname()
 if hostname != "zebra":
     is_kaggle = True
     sys.path.append("/kaggle/input")
+    sys.path.append("/kaggle/input/uspp2pm/dependency/nlpaug")
 else:
     is_kaggle = False
+    sys.path.append("./dependency/nlpaug")
 
 import pandas as pd
 import numpy as np
@@ -30,8 +32,6 @@ from uspp2pm.engine import train_one_epoch, predict
 def get_config(opt):
     config = CONFIG()
     config.is_kaggle = is_kaggle
-    config.is_training = False
-    config.is_evaluation = True
 
     hparam_dict = {}
     def update_param(name, config, opt):
@@ -54,19 +54,22 @@ def get_config(opt):
     config.test_data_path = os.path.join(config.input_path, "test.csv")
     # model
     config.model_path = (
-        f"./pretrains/{config.pretrain_name}" if not config.is_kaggle
+        f"./pretrains/{config.pretrain_name}/{config.pretrain_name}" if not config.is_kaggle
         else f"/kaggle/input/{config.pretrain_name}/{config.pretrain_name}"
     )
+    if not os.path.exists(config.model_path) and config.is_kaggle:
+        config.model_path = f"/kaggle/input/{config.pretrain_name}"
+    
     config.model_path_infer = (
         f"./out/{config.infer_name}/" if not config.is_kaggle
         else f"/kaggle/input/{config.infer_name}"
     )
     # log
-    name = "-".join([k[:5].upper() + str(v) for k, v in hparam_dict.items()])
-    config.tag = config.tag + "-" + name
-    config.save_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M')}-{config.tag}"
+    name = "-".join([k[:2].upper() + str(v)[:5] for k, v in hparam_dict.items()])
+    config.tag = name
+    config.save_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M')}--infer-{config.tag}"
     config.save_path = (
-        f"./out/{config.save_name}/" if not config.is_kaggle
+        f"./out/{config.save_name[:100]}/" if not config.is_kaggle
         else f"/kaggle/working/"
     )
     if config.debug:
@@ -74,7 +77,7 @@ def get_config(opt):
     config.is_distributed = config.nproc_per_node > 1
     return config, hparam_dict
 
-#%%
+
 def run_test(index, test_data, tokenizer, collate_fn, config):
     test_set = give_dataset(test_data, False, tokenizer, config)
 
@@ -82,7 +85,9 @@ def run_test(index, test_data, tokenizer, collate_fn, config):
     model = give_model(config).to(config.device)
 
     # load parameters
-    params_dict = torch.load(os.path.join(config.model_path_infer, f"model_{index}.ckpt"))
+    model_path = os.path.join(config.model_path_infer, f"model_{index}.ckpt")
+    logger.info(f"Loading: {model_path}")
+    params_dict = torch.load(model_path)
     model.load_state_dict(params_dict["model"])
 
     # Evaluate
@@ -91,27 +96,23 @@ def run_test(index, test_data, tokenizer, collate_fn, config):
 
     return preds
 
-def load_config(path, config):
+def load_config(opt):
+    config, _ = get_config(opt)
+    path = config.model_path_infer
     with open(os.path.join(path, "config.yaml"), mode="r", encoding="utf-8") as f:
         config_dict = yaml.load(f, Loader=yaml.FullLoader)
         config_dict.pop("infer_name")
-        config_dict.pop("model_path_infer")
-        config_dict.pop("input_path")
-        config_dict.pop("title_path")
-        config_dict.pop("model_path")
-        config_dict.pop("save_path")
-        config_dict.pop("is_kaggle")
-        config_dict.pop("train_data_path")
-        config_dict.pop("test_data_path")
     
-    for k, v in config_dict.items():
-        setattr(config, k, v)
+    for k in dir(opt):
+        if not k.startswith("_") and not k.endswith("_"):
+            v = config_dict.get(k, None)
+            if v is not None:
+                setattr(opt, k, v)
 
 def main(opt):
     config, hparam_dict = get_config(opt)
     # initiate logger
     logger.config_logger(output_dir=config.save_path)
-    load_config(config.model_path_infer, config)
     config.device = torch.device("cuda:0")
     for k in dir(config):
         if not k.startswith("_") and not k.endswith("_"):
@@ -139,11 +140,12 @@ class CONFIG:
     # dataset
     # loss
     # model
-    infer_name = "202206040003--bs24-datascombined-debugfalse-dropo0"
+    infer_name = "test"
     # optimizer
     # scheduler
     sche_step = 5
     sche_decay = 0.5
+    sche_T = 5
     # training 
     num_workers = 8
     # general
@@ -188,25 +190,30 @@ if __name__ == "__main__":
     parser.add_argument("--bs", type=int, default=24)
     parser.add_argument("--epochs", type=int, default=10)
     # general
-    parser.add_argument("--tag", type=str, default="")
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--nproc_per_node", type=int, default=2)
+    parser.add_argument("--seed", type=int, default=42)
 
     opt = parser.parse_args(args=[])
     
     infer_name_dict = {
-        "202206040003--bs24-datascombined-debugfalse-dropo0": 
-        {"adjust": False, "ensemble_name": "default"},
-        "202206021034--bs24-datascombined-debugfalse-dropo0":
-        {"adjust": False},
-        "202206041610--bs24-datascombined-debugfalse-dropo0":
-        {"adjust": True}
+        # "202206070929--adjustrue-bs96-datascombined-debugfa": {},
+        # "202206071019--adjustrue-bs96-datascombined-debugfa": {},
+        # "202206040003--bs24-datascombined-debugfalse-dropo0": {},
+        # "202206021034--bs24-datascombined-debugfalse-dropo0": {},
+        # "202206041610--bs24-datascombined-debugfalse-dropo0": {},
+        "202206081619--ADJUSTrue-BS24-DATAScombined-DEBUGFalse-DROPO0.5-ENSEMrand-EPOCH10-GROWT2-HANDLhidden_": {},
+        "202206081619-full-ADJUSTrue-BS24-DATAScombined-DEBUGFalse-DROPO0.5-ENSEMrand-EPOCH10-GROWT2-HANDLhidden_": {"num_fold": 1},
     }
     ids_list = []
     preds_list = []
     path = None
     for k, v in infer_name_dict.items():
-        opt.infer_name = k
+        opt.infer_name = (
+            k[:50] if is_kaggle
+            else k
+        )
+        load_config(opt)
         for subk, subv in v.items():
             setattr(opt, subk, subv)
         ids, preds, path = main(opt)
@@ -216,7 +223,6 @@ if __name__ == "__main__":
     # average
     ttl_preds = np.stack(preds_list)
     ttl_preds = np.mean(ttl_preds, axis=0)
-    # assert np.all(ids_list[0] == ids_list[1])
     submission = pd.DataFrame(data={
         'id': ids_list[0],
         'score': ttl_preds,
