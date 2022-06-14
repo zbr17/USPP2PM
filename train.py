@@ -262,12 +262,12 @@ def main_worker(gpu, config, hparam_dict):
             config.epochs = int(np.mean(best_epoch_list))
             run("all", train_data, None, tokenizer, collate_fn, False, config)
             
-            preds_all = np.concatenate(preds_all, axis=0)
-            labels_all = np.concatenate(labels_all, axis=0)
-            # print all fold acc
-            for idx, (val_acc, epoch) in enumerate(zip(val_acc_list, best_epoch_list)):
-                logger.info(f"Fold: {idx}, valAcc: {val_acc}, epoch: {epoch}")
-            logger.info(f"AvgAcc: {np.mean(val_acc_list)}")
+        preds_all = np.concatenate(preds_all, axis=0)
+        labels_all = np.concatenate(labels_all, axis=0)
+        # print all fold acc
+        for idx, (val_acc, epoch) in enumerate(zip(val_acc_list, best_epoch_list)):
+            logger.info(f"Fold: {idx}, valAcc: {val_acc}, epoch: {epoch}")
+        logger.info(f"AvgAcc: {np.mean(val_acc_list)}")
 
         # print train acc
         final_acc = compute_metrics((preds_all, labels_all))["pearson"]
