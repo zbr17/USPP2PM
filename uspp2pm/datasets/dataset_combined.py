@@ -1,4 +1,5 @@
 from torch.utils.data import Dataset
+import torch
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold
 import numpy as np 
@@ -28,11 +29,10 @@ class PatentDatasetCombined(Dataset):
         return len(self.inputs)
     
     def __getitem__(self, idx) -> dict:
-        input_data = self.inputs[idx].split("[SEP]")
-        input_data = [item.lower() for item in input_data]
         if self.is_training: 
+            input_data = self.inputs[idx].split("[SEP]")
             input_data = [self.aug(item) for item in input_data]
-        input_data = "[SEP]".join(input_data)
+            input_data = "[SEP]".join(input_data)
         
         output_dict = {
             "inputs": self.tokenizer(input_data),
@@ -82,9 +82,15 @@ class Augs:
 def load_split_data_combined(data_path: str, title_path: str, num_fold: int = 0) -> pd.DataFrame:
     # Load data
     data = pd.read_csv(data_path)
-    title = pd.read_csv(title_path)
-    data = data.merge(title, left_on="context", right_on="code")
-    data["input"] = data["title"] + "[SEP]" + data["anchor"] + "[SEP]" + data["target"]
+    mapping = torch.load(title_path)
+
+    data["context_text"] = data["context"].map(mapping)
+    data["input"] = (
+        data["anchor"].apply(str.lower) + "[SEP]" 
+        + data["target"].apply(str.lower) + "[SEP]" 
+        + data["context_text"].apply(str.lower)
+    )
+    data.reset_index(inplace=True)
 
     # Split data
     if num_fold < 2:

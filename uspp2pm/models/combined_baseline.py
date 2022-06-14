@@ -4,12 +4,12 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.init as init
-from torch import Tensor
+from torch import Tensor, dropout
 
 from .handler import give_handler
 
 class Mlp(nn.Module):
-    def __init__(self, size_list=[7,64,2]):
+    def __init__(self, size_list=[7,64,2], dropout=0.0):
         super().__init__()
         self.size_list = size_list
         self.num_layer = len(self.size_list) - 1
@@ -19,6 +19,7 @@ class Mlp(nn.Module):
             self.layer_list.append(nn.Linear(self.size_list[i], self.size_list[i+1]))
             if i != self.num_layer-1:
                 self.layer_list.append(nn.LeakyReLU(inplace=True))
+                self.layer_list.append(nn.Dropout(p=dropout))
         self.layer_list = nn.ModuleList(self.layer_list)
     
     def forward(self, x):
@@ -40,8 +41,10 @@ class CombinedBaseline(nn.Module):
         # get args
         cache_dir = config.model_path
         num_layer = config.num_layer
+        dropout = config.dropout
         self.output_dim = config.output_dim
         self.adjust = config.adjust
+        has_targets = config.has_targets
         # initialize
         self.criterion = criterion
         self.is_regre = getattr(self.criterion, "is_regre", True)
@@ -65,7 +68,7 @@ class CombinedBaseline(nn.Module):
                 size_list = [self.output_dim] * num_layer + [1]
             else:
                 size_list = [self.output_dim] * num_layer + [5]
-            self.classifier = Mlp(size_list=size_list)
+            self.classifier = Mlp(size_list=size_list, dropout=dropout)
         
         self.base_model_list = [self.model]
         self.new_model_list = [self.classifier]
@@ -73,8 +76,9 @@ class CombinedBaseline(nn.Module):
             self.new_model_list.append(self.handler)
         self.init_weights()
 
-        # targets = torch.arange(5) * 0.25
-        # self.register_buffer("targets", targets)
+        if has_targets:
+            targets = torch.arange(5) * 0.25
+            self.register_buffer("targets", targets)
     
     def init_weights(self):
         def _init_weights(module: nn.Module):
@@ -95,8 +99,6 @@ class CombinedBaseline(nn.Module):
         embeddings = self.handler(outputs, data_info)
 
         logits = self.classifier(embeddings)
-        # logits = torch.softmax(logits, dim=-1)
-        # logits = logits @ self.targets
         
         if self.is_regre:
             if self.adjust:

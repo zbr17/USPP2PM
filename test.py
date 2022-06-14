@@ -47,8 +47,8 @@ def get_config(opt):
         else "/kaggle/input/us-patent-phrase-to-phrase-matching"
     )
     config.title_path = (
-        "./data/cpcs/titles.csv" if not config.is_kaggle
-        else "/kaggle/input/cpccode/titles.csv"
+        "./data/cpcs/cpc_texts.pth" if not config.is_kaggle
+        else "/kaggle/input/cpccode/cpc_texts.pth"
     )
     config.train_data_path = os.path.join(config.input_path, "train.csv")
     config.test_data_path = os.path.join(config.input_path, "test.csv")
@@ -67,7 +67,7 @@ def get_config(opt):
     # log
     name = "-".join([k[:2].upper() + str(v)[:5] for k, v in hparam_dict.items()])
     config.tag = name
-    config.save_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M')}--infer-{config.tag}"
+    config.save_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M')}--infer-{config.tag}".replace(".", "-").replace("_", "-")
     config.save_path = (
         f"./out/{config.save_name[:100]}/" if not config.is_kaggle
         else f"/kaggle/working/"
@@ -172,6 +172,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_layer", type=int, default=1)
     parser.add_argument("--output_dim", type=int, default=768)
     parser.add_argument("--adjust", action="store_true")
+    parser.add_argument("--has_targets", action="store_true")
     ### combined_hdc
     parser.add_argument("--num_block", type=int, default=1)
     parser.add_argument("--update_rate", type=float, default=0.01)
@@ -202,15 +203,15 @@ if __name__ == "__main__":
         # "202206040003--bs24-datascombined-debugfalse-dropo0": {},
         # "202206021034--bs24-datascombined-debugfalse-dropo0": {},
         # "202206041610--bs24-datascombined-debugfalse-dropo0": {},
-        "202206081619--ADJUSTrue-BS24-DATAScombined-DEBUGFalse-DROPO0.5-ENSEMrand-EPOCH10-GROWT2-HANDLhidden_": {},
-        "202206081619-full-ADJUSTrue-BS24-DATAScombined-DEBUGFalse-DROPO0.5-ENSEMrand-EPOCH10-GROWT2-HANDLhidden_": {"num_fold": 1},
+        "202206091050--ADTrue-BS24-DAcombi-DEFalse-DR0-5-ENrand-EP10-GR2-HAhidde-LOmse-LR2e-05-LR10-0-MOcombi": {},
+        "202206091050-full-ADTrue-BS24-DAcombi-DEFalse-DR0-5-ENrand-EP10-GR2-HAhidde-LOmse-LR2e-05-LR10-0-MOcombi": {"num_fold": 1},
     }
     ids_list = []
     preds_list = []
     path = None
     for k, v in infer_name_dict.items():
         opt.infer_name = (
-            k[:50] if is_kaggle
+            k[:50].lower() if is_kaggle
             else k
         )
         load_config(opt)

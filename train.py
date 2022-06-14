@@ -33,6 +33,7 @@ from uspp2pm.engine import train_one_epoch, predict
 _COLLAPSE_REPEAT = 6
 _CUR_REPEAT = 0
 _COLLAPSE_THRESH = 0.1
+_FULL_TRAIN_ = False
 
 def get_config(opt):
     config = CONFIG()
@@ -52,8 +53,8 @@ def get_config(opt):
         else "/kaggle/input/us-patent-phrase-to-phrase-matching"
     )
     config.title_path = (
-        "./data/cpcs/titles.csv" if not config.is_kaggle
-        else "/kaggle/input/cpccode/titles.csv"
+        "./data/cpcs/cpc_texts.pth" if not config.is_kaggle
+        else "/kaggle/input/cpccode/cpc_texts.pth"
     )
     config.train_data_path = os.path.join(config.input_path, "train.csv")
     config.test_data_path = os.path.join(config.input_path, "test.csv")
@@ -72,7 +73,7 @@ def get_config(opt):
     # log
     name = "-".join([k[:2].upper() + str(v)[:5] for k, v in hparam_dict.items()])
     config.tag = name
-    config.save_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M')}--{config.tag}"
+    config.save_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M')}--{config.tag}".replace(".", "-").replace("_", "-")
     config.save_path = (
         f"./out/{config.save_name[:100]}/" if not config.is_kaggle
         else f"/kaggle/working/"
@@ -256,16 +257,17 @@ def main_worker(gpu, config, hparam_dict):
                 progress=float(fold) / float(config.num_fold)
             )
         
-        # Training on full dataset
-        config.epochs = int(np.mean(best_epoch_list))
-        run("all", train_data, None, tokenizer, collate_fn, False, config)
-        
-        preds_all = np.concatenate(preds_all, axis=0)
-        labels_all = np.concatenate(labels_all, axis=0)
-        # print all fold acc
-        for idx, (val_acc, epoch) in enumerate(zip(val_acc_list, best_epoch_list)):
-            logger.info(f"Fold: {idx}, valAcc: {val_acc}, epoch: {epoch}")
-        logger.info(f"AvgAcc: {np.mean(val_acc_list)}")
+        if _FULL_TRAIN_:
+            # Training on full dataset
+            config.epochs = int(np.mean(best_epoch_list))
+            run("all", train_data, None, tokenizer, collate_fn, False, config)
+            
+            preds_all = np.concatenate(preds_all, axis=0)
+            labels_all = np.concatenate(labels_all, axis=0)
+            # print all fold acc
+            for idx, (val_acc, epoch) in enumerate(zip(val_acc_list, best_epoch_list)):
+                logger.info(f"Fold: {idx}, valAcc: {val_acc}, epoch: {epoch}")
+            logger.info(f"AvgAcc: {np.mean(val_acc_list)}")
 
         # print train acc
         final_acc = compute_metrics((preds_all, labels_all))["pearson"]
@@ -321,6 +323,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_layer", type=int, default=1)
     parser.add_argument("--output_dim", type=int, default=768)
     parser.add_argument("--adjust", action="store_true")
+    parser.add_argument("--has_targets", action="store_true")
     ### combined_hdc
     parser.add_argument("--num_block", type=int, default=1)
     parser.add_argument("--update_rate", type=float, default=0.01)

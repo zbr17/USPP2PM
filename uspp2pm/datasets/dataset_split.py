@@ -33,6 +33,8 @@ class PatentDatasetSplit(Dataset):
         return output_dict
 
 def load_split_data_split(data_path: str, title_path: str, num_fold: int = 0) -> pd.DataFrame:
+    # FIXME
+    raise NotImplementedError() # 参考combined版本的写法
     # Load data
     data = pd.read_csv(data_path)
     title = pd.read_csv(title_path)
