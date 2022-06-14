@@ -1,5 +1,5 @@
 # from ._default_optim import give_default_optimizer
-from .deberta_split_optim import give_split_optimizer, give_warming_split_optimizer
+from .split_optim import give_split_optimizer, give_warming_split_optimizer
 
 _optim_dict = {}
 

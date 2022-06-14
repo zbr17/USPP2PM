@@ -29,8 +29,9 @@ class PatentDatasetCombined(Dataset):
         return len(self.inputs)
     
     def __getitem__(self, idx) -> dict:
+        input_data = self.inputs[idx]
         if self.is_training: 
-            input_data = self.inputs[idx].split("[SEP]")
+            input_data = input_data.split("[SEP]")
             input_data = [self.aug(item) for item in input_data]
             input_data = "[SEP]".join(input_data)
         
