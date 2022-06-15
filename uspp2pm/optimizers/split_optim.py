@@ -1,8 +1,10 @@
+from sched import scheduler
 import torch.nn as nn
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from transformers.trainer_pt_utils import get_parameter_names
+from transformers import get_cosine_schedule_with_warmup
 
 def add_params(model_list, is_include=True):
     """
@@ -54,7 +56,14 @@ def give_split_optimizer(model: nn.Module, config):
     })
 
     optimizer = optim.AdamW(params=optim_args)
-    scheduler = lr_scheduler.StepLR(optimizer, step_size=config.sche_step, gamma=config.sche_decay)
+    # scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.sche_T)
+    num_training_steps = int(config.num_data / config.bs / config.nproc_per_node * config.epochs)
+    scheduler = get_cosine_schedule_with_warmup(
+        optimizer=optimizer,
+        num_warmup_steps=0,
+        num_training_steps=num_training_steps,
+        num_cycles=config.sche_T
+    )
 
     return optimizer, scheduler
 
@@ -80,7 +89,13 @@ def give_warming_split_optimizer(model: nn.Module, config):
     })
 
     optimizer = optim.AdamW(params=optim_args)
-    # scheduler = lr_scheduler.StepLR(optimizer, step_size=config.sche_step, gamma=config.sche_decay)
-    scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.sche_T)
+    # scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.sche_T)
+    num_training_steps = int(config.num_data / config.nproc_per_node / config.bs)
+    scheduler = get_cosine_schedule_with_warmup(
+        optimizer=optimizer,
+        num_warmup_steps=0,
+        num_training_steps=num_training_steps,
+        num_cycles=config.sche_T
+    )
 
     return optimizer, scheduler

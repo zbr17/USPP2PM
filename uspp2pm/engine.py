@@ -82,9 +82,14 @@ def train_one_epoch(
         labels_list.append(labels)
 
         if idx % 10 == 0:
-            train_iter.set_description(f"Loss={loss_meter.avg()}")
+            lr_str = ",".join([str(item["lr"]) for item in optimizer.param_groups])
+            train_iter.set_description(f"Loss={loss_meter.avg()}, LR={lr_str}")
             tbwriter.add_scalar(f"fold{config.fold}/train/loss", loss)
-    scheduler.step()
+        
+        if config.batch_sched:
+            scheduler.step()
+    if not config.batch_sched:
+        scheduler.step()
     if return_loss:
         return torch.cat(pred_list, dim=0).cpu().numpy(), torch.cat(labels_list, dim=0).cpu().numpy(), loss_meter.value_list
     else:

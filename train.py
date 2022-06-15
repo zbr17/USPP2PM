@@ -87,6 +87,7 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
     config.fold = index
     train_set = give_dataset(train_data, True, tokenizer, config)
     val_set = give_dataset(val_data, True, tokenizer, config) if is_val else None
+    config.num_data = len(train_set)
 
     # get model
     model = give_model(config).to(config.device)
@@ -296,7 +297,8 @@ class CONFIG:
     # scheduler
     sche_step = 5
     sche_decay = 0.5
-    sche_T = 5
+    sche_T = 0.5
+    batch_sched = True
     # training 
     num_workers = 8
     # general

@@ -204,7 +204,7 @@ if __name__ == "__main__":
         # "202206021034--bs24-datascombined-debugfalse-dropo0": {},
         # "202206041610--bs24-datascombined-debugfalse-dropo0": {},
         # "202206091050--ADTrue-BS24-DAcombi-DEFalse-DR0-5-ENrand-EP10-GR2-HAhidde-LOmse-LR2e-05-LR10-0-MOcombi": {},
-        "202206141149--ADTrue-BS24-DAcombi-DEFalse-DR0-5-ENrand-EP10-GR2-HAhidde-HAFalse-LOmse-LR2e-05-LR10-0": {}
+        "202206141812--ADTrue-BS24-DAcombi-DEFalse-DR0-5-ENrand-EP10-GR2-HAhidde-HAFalse-LOmse-LR2e-05-LR10-0": {}
     }
     ids_list = []
     preds_list = []
