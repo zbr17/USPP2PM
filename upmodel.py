@@ -26,8 +26,8 @@ def upload(path):
     with open(os.path.join(path, "dataset-metadata.json"), encoding="utf-8", mode="r") as f:
         json_file = json.load(f)
     name = os.path.basename(path)
-    if len(name) > 50:
-        name = name[:50]
+    if len(name) > 40:
+        name = name[:40]
     print(name)
     json_file["title"] = name
     json_file["id"] = f"boruizhang/{name}"

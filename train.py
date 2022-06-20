@@ -92,12 +92,12 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
     # get model
     model = give_model(config).to(config.device)
     if dist.is_initialized():
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[config.rank])
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[config.rank], find_unused_parameters=True)
 
     best_val_acc, best_epoch = -1, 0
     cur_acc = 0
 
-    # warming up
+    # warming up    
     config.epoch = 0
     optimizer, scheduler = give_warming_optim(model, config)
     logger.info(f"Warming epoch")
@@ -107,9 +107,9 @@ def run(index, train_data, val_data, tokenizer, collate_fn, is_val, config):
     logger.info(f"TrainSET - Fold: {index}, Acc: {sub_acc}")
     tbwriter.add_scalar(f"fold{index}/train/acc", sub_acc)
     # detect if collapse
-    if sub_acc < _COLLAPSE_THRESH:
-        logger.info("Training collapse!!!")
-        return -1, -1, -1, -1
+    # if sub_acc < _COLLAPSE_THRESH:
+    #     logger.info("Training collapse!!!")
+    #     return -1, -1, -1, -1
 
     # get optimizer and scheduler
     optimizer, scheduler = give_optim(model, config)

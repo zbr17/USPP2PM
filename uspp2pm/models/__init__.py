@@ -1,10 +1,12 @@
 from transformers.models.deberta_v2 import DebertaV2Model
 from transformers.models.roberta.modeling_roberta import RobertaModel
+from transformers.models.xlm_roberta.modeling_xlm_roberta import XLMRobertaModel
 from transformers.models.bert.modeling_bert import BertModel
 from transformers.models.electra.modeling_electra import ElectraModel
 
 from transformers.models.deberta_v2 import DebertaV2Tokenizer
 from transformers.models.roberta.tokenization_roberta import RobertaTokenizer
+from transformers.models.xlm_roberta.tokenization_xlm_roberta import XLMRobertaTokenizer
 from transformers.models.bert.tokenization_bert import BertTokenizer
 from transformers.models.electra.tokenization_electra import ElectraTokenizer
 
@@ -30,6 +32,8 @@ _pretrain_dict = {
     "deberta-v3-large": DebertaV2Model,
     "deberta-v2-xlarge": DebertaV2Model,
     "roberta-base": RobertaModel,
+    "roberta-large": RobertaModel,
+    "xlm-roberta-large2": XLMRobertaModel,
     "bert-for-patents": BertModel,
     "electra-base-disc-cola": ElectraModel,
     "electra-large": ElectraModel
@@ -40,6 +44,8 @@ _tokenizer_dict = {
     "deberta-v3-base": DebertaV2Tokenizer,
     "deberta-v2-xlarge": DebertaV2Tokenizer,
     "roberta-base": RobertaTokenizer,
+    "roberta-large": RobertaTokenizer,
+    "xlm-roberta-large2": XLMRobertaTokenizer,
     "bert-for-patents": BertTokenizer,
     "electra-base-disc-cola": ElectraTokenizer,
     "electra-large": ElectraTokenizer

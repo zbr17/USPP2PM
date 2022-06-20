@@ -11,7 +11,7 @@ sys.path.append("./dependency/nlpaug")
 try:
     import nlpaug.augmenter.word as naw
 except:
-    print("No nlpaug")
+    pass
 
 class PatentDatasetCombined(Dataset):
     def __init__(self, data: pd.DataFrame, is_training: bool = True, tokenizer = None):
@@ -84,11 +84,17 @@ def load_split_data_combined(data_path: str, title_path: str, num_fold: int = 0)
     # Load data
     data = pd.read_csv(data_path)
     mapping = torch.load(title_path)
+    
+    mapping_tmp = {}
+    # nlp template
+    for k, v in mapping.items():
+        value, subvalue = v.split(".")
+        mapping_tmp[k] = f"Topic: {value}. Details: {subvalue}"
 
     data["context_text"] = data["context"].map(mapping)
     data["input"] = (
-        data["anchor"].apply(str.lower) + "[SEP]" 
-        + data["target"].apply(str.lower) + "[SEP]" 
+        "Key word: " + data["anchor"].apply(str.lower) + "[SEP]" 
+        "Key word: " + data["target"].apply(str.lower) + "[SEP]" 
         + data["context_text"].apply(str.lower)
     )
     data.reset_index(inplace=True)
